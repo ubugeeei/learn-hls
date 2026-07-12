@@ -43,8 +43,10 @@ object PlaylistValidator:
 
   def validateMultivariant(playlist: MultivariantPlaylist): Vector[String] =
     val groups     = playlist.renditions.map(_.groupId).toSet
-    val references =
-      playlist.variants.flatMap(v => Vector(v.audioGroup, v.videoGroup, v.subtitlesGroup).flatten)
+    val references = playlist.variants.flatMap(v =>
+      Vector(v.audioGroup, v.videoGroup, v.subtitlesGroup).flatten ++
+        v.closedCaptions.collect { case ClosedCaptions.Group(id) => id }
+    ) ++ playlist.iFrameVariants.flatMap(_.videoGroup)
     val referenceErrors = references
       .filterNot(groups)
       .distinct
@@ -53,8 +55,29 @@ object PlaylistValidator:
       case r if r.forced && r.mediaType != RenditionType.Subtitles =>
         s"FORCED is only valid for SUBTITLES: ${r.name}"
       case r if r.default && !r.autoselect => s"DEFAULT=YES requires AUTOSELECT=YES: ${r.name}"
+      case r if r.mediaType == RenditionType.Subtitles && r.uri.isEmpty =>
+        s"SUBTITLES rendition requires URI: ${r.name}"
+      case r if r.mediaType == RenditionType.ClosedCaptions && r.uri.nonEmpty =>
+        s"CLOSED-CAPTIONS rendition forbids URI: ${r.name}"
+      case r if r.mediaType == RenditionType.ClosedCaptions && r.instreamId.isEmpty =>
+        s"CLOSED-CAPTIONS rendition requires INSTREAM-ID: ${r.name}"
+      case r if r.instreamId.nonEmpty && r.mediaType != RenditionType.ClosedCaptions =>
+        s"INSTREAM-ID is only valid for CLOSED-CAPTIONS: ${r.name}"
+    val sessionDataErrors = playlist.sessionData
+      .groupBy(data => data.dataId -> data.language)
+      .collect:
+        case ((dataId, language), values) if values.size > 1 =>
+          s"duplicate SESSION-DATA combination: $dataId/${language.getOrElse("")}"
+      .toVector
+    val captionModes  = playlist.variants.flatMap(_.closedCaptions)
+    val captionErrors =
+      if captionModes.contains(ClosedCaptions.None) && captionModes.exists:
+          case ClosedCaptions.Group(_) => true
+          case ClosedCaptions.None     => false
+      then Vector("CLOSED-CAPTIONS=NONE must appear on every variant when used")
+      else Vector.empty
     (if playlist.variants.isEmpty then Vector("multivariant playlist has no variants")
-     else Vector.empty) ++ referenceErrors ++ renditionErrors
+     else Vector.empty) ++ referenceErrors ++ renditionErrors ++ sessionDataErrors ++ captionErrors
 
   /** Minimum compatibility version from RFC 8216 section 7. */
   def minimumVersion(playlist: MediaPlaylist): Option[Int] =

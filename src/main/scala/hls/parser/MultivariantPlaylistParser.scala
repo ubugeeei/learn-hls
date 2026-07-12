@@ -12,6 +12,10 @@ private[parser] object MultivariantPlaylistParser:
     var independent                                 = false
     val variants                                    = Vector.newBuilder[Variant]
     val renditions                                  = Vector.newBuilder[Rendition]
+    val iFrameVariants                              = Vector.newBuilder[IFrameVariant]
+    val sessionData                                 = Vector.newBuilder[SessionData]
+    val sessionKeys                                 = Vector.newBuilder[Encryption]
+    var start: Option[StartOffset]                  = None
     var pending: Option[(Int, Map[String, String])] = None
     lines.zipWithIndex
       .drop(1)
@@ -38,6 +42,25 @@ private[parser] object MultivariantPlaylistParser:
                 AttributeList
                   .parse(line.drop(18), index + 1)
                   .map(attributes => pending = Some(index + 1 -> attributes))
+            else if line.startsWith("#EXT-X-I-FRAME-STREAM-INF:") then
+              AttributeList
+                .parse(line.drop(26), index + 1)
+                .flatMap(parseIFrameVariant(_, index + 1))
+                .map(iFrameVariants += _)
+            else if line.startsWith("#EXT-X-SESSION-DATA:") then
+              AttributeList
+                .parse(line.drop(20), index + 1)
+                .flatMap(parseSessionData(_, index + 1))
+                .map(sessionData += _)
+            else if line.startsWith("#EXT-X-SESSION-KEY:") then
+              PlaylistParser
+                .parseKey(line.drop(19), index + 1)
+                .flatMap:
+                  case Encryption.None =>
+                    Left(ParseError(index + 1, "SESSION-KEY forbids METHOD=NONE"))
+                  case encryption => Right(sessionKeys += encryption)
+            else if line.startsWith("#EXT-X-START:") then
+              parseStart(line.drop(13), index + 1).map(value => start = Some(value))
             else if line.startsWith("#EXT-X-TARGETDURATION:") || line.startsWith("#EXTINF:") then
               Left(ParseError(index + 1, "media and multivariant tags cannot be mixed"))
             else if line.isEmpty || line.startsWith("#") then Right(())
@@ -54,8 +77,16 @@ private[parser] object MultivariantPlaylistParser:
         )
       )
       .flatMap: _ =>
-        val playlist =
-          MultivariantPlaylist(version, independent, renditions.result(), variants.result())
+        val playlist = MultivariantPlaylist(
+          version = version,
+          independentSegments = independent,
+          renditions = renditions.result(),
+          variants = variants.result(),
+          iFrameVariants = iFrameVariants.result(),
+          sessionData = sessionData.result(),
+          sessionKeys = sessionKeys.result(),
+          start = start
+        )
         PlaylistValidator
           .validateMultivariant(playlist)
           .headOption
@@ -86,16 +117,21 @@ private[parser] object MultivariantPlaylistParser:
         )
       uri <- PlaylistUri.parse(rawUri).left.map(ParseError(line + 1, _))
     yield Variant(
-      uri,
-      bandwidth,
-      average,
-      attributes.get("CODECS").toVector.flatMap(_.split(',')),
-      resolution,
-      frameRate,
-      attributes.get("AUDIO"),
-      attributes.get("VIDEO"),
-      attributes.get("SUBTITLES"),
-      attributes.get("CLOSED-CAPTIONS")
+      uri = uri,
+      bandwidth = bandwidth,
+      averageBandwidth = average,
+      codecs = attributes.get("CODECS").toVector.flatMap(_.split(',')),
+      resolution = resolution,
+      frameRate = frameRate,
+      audioGroup = attributes.get("AUDIO"),
+      videoGroup = attributes.get("VIDEO"),
+      subtitlesGroup = attributes.get("SUBTITLES"),
+      closedCaptions = attributes
+        .get("CLOSED-CAPTIONS")
+        .map:
+          case "NONE" => ClosedCaptions.None
+          case group  => ClosedCaptions.Group(group),
+      hdcpLevel = attributes.get("HDCP-LEVEL").flatMap(parseHdcp)
     )
 
   private def parseRendition(
@@ -119,16 +155,79 @@ private[parser] object MultivariantPlaylistParser:
         .get("URI")
         .traverse(value => PlaylistUri.parse(value).left.map(ParseError(line, _)))
     yield Rendition(
-      mediaType,
-      group,
-      name,
-      uri,
-      attributes.get("LANGUAGE"),
-      yes("DEFAULT"),
-      yes("AUTOSELECT"),
-      yes("FORCED"),
-      attributes.get("CHARACTERISTICS").toVector.flatMap(_.split(','))
+      mediaType = mediaType,
+      groupId = group,
+      name = name,
+      uri = uri,
+      language = attributes.get("LANGUAGE"),
+      associatedLanguage = attributes.get("ASSOC-LANGUAGE"),
+      default = yes("DEFAULT"),
+      autoselect = yes("AUTOSELECT"),
+      forced = yes("FORCED"),
+      characteristics = attributes.get("CHARACTERISTICS").toVector.flatMap(_.split(',')),
+      instreamId = attributes.get("INSTREAM-ID"),
+      channels = attributes.get("CHANNELS")
     )
+
+  private def parseIFrameVariant(
+      attributes: Map[String, String],
+      line: Int
+  ): Either[ParseError, IFrameVariant] =
+    for
+      rawUri <- attributes.get("URI").toRight(ParseError(line, "I-FRAME-STREAM-INF requires URI"))
+      uri    <- PlaylistUri.parse(rawUri).left.map(ParseError(line, _))
+      rawBandwidth <- attributes
+        .get("BANDWIDTH")
+        .toRight(ParseError(line, "I-FRAME-STREAM-INF requires BANDWIDTH"))
+      bandwidth <- Bandwidth.parse(rawBandwidth).left.map(ParseError(line, _))
+      average   <- attributes
+        .get("AVERAGE-BANDWIDTH")
+        .traverse(value => Bandwidth.parse(value).left.map(ParseError(line, _)))
+      resolution <- attributes
+        .get("RESOLUTION")
+        .traverse(value => Resolution.parse(value).left.map(ParseError(line, _)))
+    yield IFrameVariant(
+      uri,
+      bandwidth,
+      average,
+      attributes.get("CODECS").toVector.flatMap(_.split(',')),
+      resolution,
+      attributes.get("HDCP-LEVEL").flatMap(parseHdcp),
+      attributes.get("VIDEO")
+    )
+
+  private def parseSessionData(
+      attributes: Map[String, String],
+      line: Int
+  ): Either[ParseError, SessionData] =
+    for
+      dataId <- attributes.get("DATA-ID").toRight(ParseError(line, "SESSION-DATA requires DATA-ID"))
+      uri    <- attributes
+        .get("URI")
+        .traverse(value => PlaylistUri.parse(value).left.map(ParseError(line, _)))
+      _ <- Either.cond(
+        attributes.get("VALUE").isDefined != uri.isDefined,
+        (),
+        ParseError(line, "SESSION-DATA requires exactly one of VALUE and URI")
+      )
+    yield SessionData(dataId, attributes.get("VALUE"), uri, attributes.get("LANGUAGE"))
+
+  private def parseStart(input: String, line: Int): Either[ParseError, StartOffset] =
+    AttributeList
+      .parse(input, line)
+      .flatMap: attributes =>
+        for
+          raw <- attributes
+            .get("TIME-OFFSET")
+            .toRight(ParseError(line, "EXT-X-START requires TIME-OFFSET"))
+          seconds <- Try(BigDecimal(raw)).toEither.left
+            .map(_ => ParseError(line, "invalid start offset"))
+        yield StartOffset(seconds, attributes.get("PRECISE").contains("YES"))
+
+  private def parseHdcp(value: String): Option[HdcpLevel] = value match
+    case "TYPE-0" => Some(HdcpLevel.Type0)
+    case "NONE"   => Some(HdcpLevel.None)
+    case _        => None
 
   extension [A](option: Option[A])
     private def traverse[B](function: A => Either[ParseError, B]): Either[ParseError, Option[B]] =

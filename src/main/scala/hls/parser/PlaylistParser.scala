@@ -29,6 +29,8 @@ object PlaylistParser:
       case _
           if lines.exists(_.startsWith("#EXT-X-STREAM-INF:")) || lines.exists(
             _.startsWith("#EXT-X-MEDIA:")
+          ) || lines.exists(_.startsWith("#EXT-X-I-FRAME-STREAM-INF:")) || lines.exists(
+            _.startsWith("#EXT-X-SESSION-")
           ) =>
         MultivariantPlaylistParser.parse(lines)
       case _ => parseMedia(lines)
@@ -212,7 +214,7 @@ object PlaylistParser:
                 .left
                 .map(ParseError(0, _))
 
-  private def parseKey(input: String, line: Int): Either[ParseError, Encryption] =
+  private[parser] def parseKey(input: String, line: Int): Either[ParseError, Encryption] =
     AttributeList
       .parse(input, line)
       .flatMap: a =>

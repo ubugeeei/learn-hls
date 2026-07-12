@@ -107,3 +107,47 @@ final class PlaylistParserSuite extends munit.FunSuite:
       |""".stripMargin
     val error = PlaylistParser.parse(source).left.toOption.get
     assert(error.message.contains("requires CLASS"))
+
+  test("cover every RFC 8216 Multivariant tag and attribute family"):
+    val source = """#EXTM3U
+      |#EXT-X-VERSION:7
+      |#EXT-X-INDEPENDENT-SEGMENTS
+      |#EXT-X-START:TIME-OFFSET=-12.5,PRECISE=YES
+      |#EXT-X-SESSION-DATA:DATA-ID="com.example.title",VALUE="Example",LANGUAGE="en"
+      |#EXT-X-SESSION-DATA:DATA-ID="com.example.json",URI="metadata.json"
+      |#EXT-X-SESSION-KEY:METHOD=AES-128,URI="keys/session.bin"
+      |#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="English",LANGUAGE="en",ASSOC-LANGUAGE="en-US",URI="audio/en.m3u8",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2"
+      |#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",NAME="English CC",LANGUAGE="en",AUTOSELECT=YES,INSTREAM-ID="CC1"
+      |#EXT-X-STREAM-INF:BANDWIDTH=2400000,AVERAGE-BANDWIDTH=2000000,CODECS="avc1.4d401f,mp4a.40.2",RESOLUTION=1280x720,FRAME-RATE=29.97,AUDIO="audio",CLOSED-CAPTIONS="cc",HDCP-LEVEL=TYPE-0
+      |video/720.m3u8
+      |#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=150000,AVERAGE-BANDWIDTH=120000,CODECS="avc1.4d401f",RESOLUTION=1280x720,URI="video/iframe.m3u8",HDCP-LEVEL=TYPE-0
+      |""".stripMargin
+    val parsed = PlaylistParser.parse(source)
+    assert(parsed.isRight, parsed.left.toOption.map(_.toString).getOrElse(""))
+    val master = parsed.toOption.get.asInstanceOf[Playlist.Multivariant].value
+    assertEquals(master.sessionData.size, 2)
+    assertEquals(master.sessionKeys.size, 1)
+    assertEquals(master.iFrameVariants.size, 1)
+    assertEquals(master.renditions.head.channels, Some("2"))
+    assertEquals(master.renditions(1).instreamId, Some("CC1"))
+    assertEquals(master.variants.head.closedCaptions, Some(ClosedCaptions.Group("cc")))
+    assertEquals(master.variants.head.hdcpLevel, Some(HdcpLevel.Type0))
+    assertEquals(PlaylistParser.parse(PlaylistRenderer.render(parsed.toOption.get)), parsed)
+
+  test("reject invalid session-data and session-key declarations"):
+    final case class InvalidCase(tag: String, expected: String)
+    val cases = Vector(
+      InvalidCase(
+        "#EXT-X-SESSION-DATA:DATA-ID=\"id\",VALUE=\"inline\",URI=\"external.json\"",
+        "exactly one"
+      ),
+      InvalidCase("#EXT-X-SESSION-KEY:METHOD=NONE", "forbids METHOD=NONE")
+    )
+    cases.foreach: example =>
+      val source = s"""#EXTM3U
+        |${example.tag}
+        |#EXT-X-STREAM-INF:BANDWIDTH=1000
+        |video.m3u8
+        |""".stripMargin
+      val error = PlaylistParser.parse(source).left.toOption.get
+      assert(error.message.contains(example.expected), clues(example, error))

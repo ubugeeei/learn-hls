@@ -52,7 +52,8 @@ object PlaylistRenderer:
   /** Renders a validated Multivariant Playlist with a trailing newline. */
   def renderMultivariant(playlist: MultivariantPlaylist): String =
     val header = Vector("#EXTM3U") ++ playlist.version.map(v => s"#EXT-X-VERSION:$v") ++
-      Option.when(playlist.independentSegments)("#EXT-X-INDEPENDENT-SEGMENTS")
+      Option.when(playlist.independentSegments)("#EXT-X-INDEPENDENT-SEGMENTS") ++
+      playlist.start.map(renderStart)
     val renditionLines = playlist.renditions.map: rendition =>
       val attributes = Vector(
         Some("TYPE" -> (rendition.mediaType match
@@ -64,12 +65,15 @@ object PlaylistRenderer:
         Some("NAME"     -> quote(rendition.name)),
         rendition.uri.map(uri => "URI" -> quote(uri.toString)),
         rendition.language.map("LANGUAGE" -> quote(_)),
+        rendition.associatedLanguage.map("ASSOC-LANGUAGE" -> quote(_)),
         Option.when(rendition.default)("DEFAULT"       -> "YES"),
         Option.when(rendition.autoselect)("AUTOSELECT" -> "YES"),
         Option.when(rendition.forced)("FORCED"         -> "YES"),
         Option.when(rendition.characteristics.nonEmpty)(
           "CHARACTERISTICS" -> quote(rendition.characteristics.mkString(","))
-        )
+        ),
+        rendition.instreamId.map("INSTREAM-ID" -> quote(_)),
+        rendition.channels.map("CHANNELS" -> quote(_))
       ).flatten
       s"#EXT-X-MEDIA:${attributes.map((k, v) => s"$k=$v").mkString(",")}"
     val variantLines = playlist.variants.flatMap: variant =>
@@ -82,13 +86,39 @@ object PlaylistRenderer:
         variant.audioGroup.map("AUDIO" -> quote(_)),
         variant.videoGroup.map("VIDEO" -> quote(_)),
         variant.subtitlesGroup.map("SUBTITLES" -> quote(_)),
-        variant.closedCaptionsGroup.map("CLOSED-CAPTIONS" -> quote(_))
+        variant.closedCaptions.map:
+          case ClosedCaptions.Group(id) => "CLOSED-CAPTIONS" -> quote(id)
+          case ClosedCaptions.None      => "CLOSED-CAPTIONS" -> "NONE",
+        variant.hdcpLevel.map("HDCP-LEVEL" -> renderHdcp(_))
       ).flatten
       Vector(
         s"#EXT-X-STREAM-INF:${attributes.map((k, v) => s"$k=$v").mkString(",")}",
         variant.uri.toString
       )
-    (header ++ renditionLines ++ variantLines).mkString("", "\n", "\n")
+    val iFrameLines = playlist.iFrameVariants.map: variant =>
+      val attributes = Vector(
+        Some("URI"       -> quote(variant.uri.toString)),
+        Some("BANDWIDTH" -> variant.bandwidth.bitsPerSecond.toString),
+        variant.averageBandwidth.map(value => "AVERAGE-BANDWIDTH" -> value.bitsPerSecond.toString),
+        Option.when(variant.codecs.nonEmpty)("CODECS" -> quote(variant.codecs.mkString(","))),
+        variant.resolution.map(value => "RESOLUTION" -> s"${value.width}x${value.height}"),
+        variant.hdcpLevel.map("HDCP-LEVEL" -> renderHdcp(_)),
+        variant.videoGroup.map("VIDEO" -> quote(_))
+      ).flatten
+      s"#EXT-X-I-FRAME-STREAM-INF:${renderAttributes(attributes)}"
+    val dataLines = playlist.sessionData.map: data =>
+      val attributes = Vector(
+        Some("DATA-ID" -> quote(data.dataId)),
+        data.value.map("VALUE" -> quote(_)),
+        data.uri.map(uri => "URI" -> quote(uri.toString)),
+        data.language.map("LANGUAGE" -> quote(_))
+      ).flatten
+      s"#EXT-X-SESSION-DATA:${renderAttributes(attributes)}"
+    val keyLines = playlist.sessionKeys.map(encryption =>
+      renderKey(encryption).replace("#EXT-X-KEY:", "#EXT-X-SESSION-KEY:")
+    )
+    (header ++ renditionLines ++ keyLines ++ dataLines ++ variantLines ++ iFrameLines)
+      .mkString("", "\n", "\n")
 
   private def renderKey(encryption: Encryption): String = encryption match
     case Encryption.None            => "#EXT-X-KEY:METHOD=NONE"
@@ -133,3 +163,10 @@ object PlaylistRenderer:
     s"#EXT-X-DATERANGE:${attributes.map((name, value) => s"$name=$value").mkString(",")}"
 
   private def decimal(value: BigDecimal): String = value.bigDecimal.stripTrailingZeros.toPlainString
+
+  private def renderHdcp(value: HdcpLevel): String = value match
+    case HdcpLevel.Type0 => "TYPE-0"
+    case HdcpLevel.None  => "NONE"
+
+  private def renderAttributes(attributes: Vector[(String, String)]): String =
+    attributes.map((name, value) => s"$name=$value").mkString(",")

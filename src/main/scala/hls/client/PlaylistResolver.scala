@@ -35,7 +35,17 @@ object PlaylistResolver:
       renditions = playlist.renditions.map(rendition =>
         rendition.copy(uri = rendition.uri.map(resolveUri(_, base)))
       ),
-      variants = playlist.variants.map(variant => variant.copy(uri = resolveUri(variant.uri, base)))
+      variants =
+        playlist.variants.map(variant => variant.copy(uri = resolveUri(variant.uri, base))),
+      iFrameVariants =
+        playlist.iFrameVariants.map(variant => variant.copy(uri = resolveUri(variant.uri, base))),
+      sessionData =
+        playlist.sessionData.map(data => data.copy(uri = data.uri.map(resolveUri(_, base)))),
+      sessionKeys = playlist.sessionKeys.map:
+        case Encryption.None            => Encryption.None
+        case Encryption.Aes128(uri, iv) => Encryption.Aes128(resolveUri(uri, base), iv)
+        case Encryption.SampleAes(uri, format, versions, iv) =>
+          Encryption.SampleAes(resolveUri(uri, base), format, versions, iv)
     )
 
   private def resolveUri(reference: PlaylistUri, base: URI): PlaylistUri =
