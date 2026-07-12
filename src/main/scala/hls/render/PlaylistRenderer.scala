@@ -20,7 +20,9 @@ object PlaylistRenderer:
       playlist.playlistType.map:
         case PlaylistType.Event => "#EXT-X-PLAYLIST-TYPE:EVENT"
         case PlaylistType.Vod => "#EXT-X-PLAYLIST-TYPE:VOD"
-      ++ Option.when(playlist.independentSegments)("#EXT-X-INDEPENDENT-SEGMENTS")
+      ++ Option.when(playlist.independentSegments)("#EXT-X-INDEPENDENT-SEGMENTS") ++
+      playlist.start.map(renderStart) ++
+      Option.when(playlist.iFramesOnly)("#EXT-X-I-FRAMES-ONLY")
     var key: Encryption = Encryption.None
     var initMap: Option[InitializationMap] = None
     val body = playlist.segments.flatMap: segment =>
@@ -29,10 +31,12 @@ object PlaylistRenderer:
       key = segment.encryption
       initMap = segment.initializationMap
       keyLine ++ mapLine.filter(_.nonEmpty) ++
+        segment.dateRanges.map(renderDateRange) ++
         Option.when(segment.discontinuity)("#EXT-X-DISCONTINUITY") ++
         segment.programDateTime.map(date => s"#EXT-X-PROGRAM-DATE-TIME:$date") ++
         Vector(s"#EXTINF:${segment.duration.render},${segment.title.getOrElse("")}") ++
         segment.byteRange.map(range => s"#EXT-X-BYTERANGE:${range.length}@${range.offset}") ++
+        Option.when(segment.gap)("#EXT-X-GAP") ++
         Vector(segment.uri.toString)
     (header ++ body ++ Option.when(playlist.ended)("#EXT-X-ENDLIST")).mkString("", "\n", "\n")
 
@@ -79,3 +83,17 @@ object PlaylistRenderer:
 
   private def quote(value: String): String = s"\"$value\""
 
+  private def renderStart(start: StartOffset): String =
+    s"#EXT-X-START:TIME-OFFSET=${decimal(start.seconds)}${if start.precise then ",PRECISE=YES" else ""}"
+
+  private def renderDateRange(range: DateRange): String =
+    val attributes = Vector(
+      Some("ID" -> quote(range.id)), Some("START-DATE" -> quote(range.startDate.toString)),
+      range.className.map("CLASS" -> quote(_)), range.endDate.map(value => "END-DATE" -> quote(value.toString)),
+      range.duration.map(value => "DURATION" -> value.render), range.plannedDuration.map(value => "PLANNED-DURATION" -> value.render),
+      Option.when(range.endOnNext)("END-ON-NEXT" -> "YES"), range.scte35Cmd.map("SCTE35-CMD" -> _),
+      range.scte35Out.map("SCTE35-OUT" -> _), range.scte35In.map("SCTE35-IN" -> _)
+    ).flatten ++ range.clientAttributes.toVector.sortBy(_._1).map((name, value) => name -> quote(value))
+    s"#EXT-X-DATERANGE:${attributes.map((name, value) => s"$name=$value").mkString(",")}" 
+
+  private def decimal(value: BigDecimal): String = value.bigDecimal.stripTrailingZeros.toPlainString

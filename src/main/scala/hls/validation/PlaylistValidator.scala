@@ -20,7 +20,13 @@ object PlaylistValidator:
       case _ => Vector.empty
     val versionErrors = minimumVersion(playlist).toVector.flatMap: required =>
       playlist.version.filter(_ < required).map(actual => s"playlist version $actual is lower than required version $required")
-    targetErrors ++ typeErrors ++ versionErrors
+    val dateRanges = playlist.segments.flatMap(_.dateRanges)
+    val dateRangeErrors =
+      dateRanges.groupBy(_.id).collect { case (id, ranges) if ranges.size > 1 => s"duplicate date range ID: $id" }.toVector ++
+      dateRanges.collect:
+        case range if range.endOnNext && range.className.isEmpty => s"END-ON-NEXT date range requires CLASS: ${range.id}"
+        case range if range.endOnNext && (range.duration.nonEmpty || range.endDate.nonEmpty) => s"END-ON-NEXT date range cannot have END-DATE or DURATION: ${range.id}"
+    targetErrors ++ typeErrors ++ versionErrors ++ dateRangeErrors
 
   def validateMultivariant(playlist: MultivariantPlaylist): Vector[String] =
     val groups = playlist.renditions.map(_.groupId).toSet
@@ -37,9 +43,10 @@ object PlaylistValidator:
       Vector(
         Option.when(segment.byteRange.nonEmpty)(4),
         Option.when(segment.initializationMap.nonEmpty)(6),
+        Option.when(segment.dateRanges.nonEmpty)(6),
+        Option.when(segment.gap)(6),
         Option.when(segment.encryption match
           case Encryption.SampleAes(_, Some(_), _, _) => true
           case _ => false)(5)
       ).flatten
     versions.maxOption
-

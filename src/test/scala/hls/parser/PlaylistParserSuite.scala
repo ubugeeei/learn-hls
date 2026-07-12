@@ -65,3 +65,33 @@ final class PlaylistParserSuite extends munit.FunSuite:
     val source = "\uFEFF#EXTM3U\r\n#EXT-X-TARGETDURATION:1\r\n#EXTINF:1,\r\na.ts\r\n"
     assert(PlaylistParser.parse(source).isRight)
 
+  test("parse date ranges, start offsets, gaps, and I-frame playlists"):
+    val source = """#EXTM3U
+      |#EXT-X-VERSION:6
+      |#EXT-X-TARGETDURATION:4
+      |#EXT-X-START:TIME-OFFSET=-8.5,PRECISE=YES
+      |#EXT-X-I-FRAMES-ONLY
+      |#EXT-X-DATERANGE:ID="ad-1",CLASS="ads",START-DATE="2026-07-12T10:00:00+09:00",DURATION=4.0,X-CAMPAIGN="summer"
+      |#EXTINF:4,
+      |#EXT-X-GAP
+      |missing.m4s
+      |""".stripMargin
+    val parsed = PlaylistParser.parse(source)
+    assert(parsed.isRight, parsed.left.toOption.map(_.toString).getOrElse(""))
+    val media = parsed.toOption.get.asInstanceOf[Playlist.Media].value
+    assertEquals(media.start, Some(StartOffset(BigDecimal("-8.5"), precise = true)))
+    assert(media.iFramesOnly)
+    assert(media.segments.head.gap)
+    assertEquals(media.segments.head.dateRanges.head.clientAttributes, Map("X-CAMPAIGN" -> "summer"))
+    assertEquals(PlaylistParser.parse(PlaylistRenderer.render(parsed.toOption.get)), parsed)
+
+  test("validate END-ON-NEXT date ranges"):
+    val source = """#EXTM3U
+      |#EXT-X-VERSION:6
+      |#EXT-X-TARGETDURATION:4
+      |#EXT-X-DATERANGE:ID="chapter",START-DATE="2026-07-12T10:00:00Z",END-ON-NEXT=YES
+      |#EXTINF:4,
+      |one.ts
+      |""".stripMargin
+    val error = PlaylistParser.parse(source).left.toOption.get
+    assert(error.message.contains("requires CLASS"))

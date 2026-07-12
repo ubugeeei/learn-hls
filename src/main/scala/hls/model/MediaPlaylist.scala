@@ -40,7 +40,9 @@ final case class MediaSegment(
     discontinuity: Boolean = false,
     encryption: Encryption = Encryption.None,
     initializationMap: Option[InitializationMap] = None,
-    programDateTime: Option[OffsetDateTime] = None
+    programDateTime: Option[OffsetDateTime] = None,
+    gap: Boolean = false,
+    dateRanges: Vector[DateRange] = Vector.empty
 )
 
 /** A complete Media Playlist. Construction is validated by [[hls.validation.PlaylistValidator]]. */
@@ -52,6 +54,7 @@ final case class MediaPlaylist(
     playlistType: Option[PlaylistType] = None,
     independentSegments: Boolean = false,
     segments: Vector[MediaSegment],
-    ended: Boolean = false
+    ended: Boolean = false,
+    start: Option[StartOffset] = None,
+    iFramesOnly: Boolean = false
 )
-
