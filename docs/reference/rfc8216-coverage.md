@@ -85,7 +85,7 @@ not falsely reported as parser validation.
 | Throughput estimation | Boundary | Caller supplies an estimate from its transfer measurements |
 | Automatic reload scheduler | Boundary | Caller integrates timing/backoff with its effect system |
 | Media decoding/rendering | Boundary | Platform/player decoder responsibility |
-| Redundant-stream failover | Not covered | Requires multi-origin health policy |
+| Redundant-stream failover | Covered | immutable health, preferred source, retry classification, exponential cooldown, conditional-to-fresh fallback |
 | AES-128 segment cryptography | Covered | 16-byte key, explicit/derived IV, CBC, PKCS#7 padding |
 | SAMPLE-AES cryptography | Not covered | Requires format-specific subsample encryption |
 
