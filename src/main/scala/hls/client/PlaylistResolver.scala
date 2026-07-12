@@ -4,16 +4,17 @@ import hls.model.*
 import hls.model.ValueTypes.*
 import java.net.URI
 
-/** Resolves every URI reference in a playlist against its retrieval URI.
-  *
-  * Relative references are defined by RFC 3986 and used throughout HLS; see
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.1 RFC 8216 §4.1]]. Keeping
-  * resolution separate from parsing allows the same parser to handle strings
-  * that have not yet been associated with a network location.
-  */
+/**
+ * Resolves every URI reference in a playlist against its retrieval URI.
+ *
+ * Relative references are defined by RFC 3986 and used throughout HLS; see
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.1 RFC 8216 §4.1]]. Keeping resolution separate
+ * from parsing allows the same parser to handle strings that have not yet been associated with a
+ * network location.
+ */
 object PlaylistResolver:
   def resolve(playlist: Playlist, base: URI): Playlist = playlist match
-    case Playlist.Media(value) => Playlist.Media(resolveMedia(value, base))
+    case Playlist.Media(value)        => Playlist.Media(resolveMedia(value, base))
     case Playlist.Multivariant(value) => Playlist.Multivariant(resolveMultivariant(value, base))
 
   def resolveMedia(playlist: MediaPlaylist, base: URI): MediaPlaylist =
@@ -21,20 +22,21 @@ object PlaylistResolver:
       segment.copy(
         uri = resolveUri(segment.uri, base),
         encryption = segment.encryption match
-          case Encryption.None => Encryption.None
+          case Encryption.None            => Encryption.None
           case Encryption.Aes128(uri, iv) => Encryption.Aes128(resolveUri(uri, base), iv)
           case Encryption.SampleAes(uri, format, versions, iv) =>
             Encryption.SampleAes(resolveUri(uri, base), format, versions, iv),
-        initializationMap = segment.initializationMap.map(map => map.copy(uri = resolveUri(map.uri, base)))
-      )
-    )
+        initializationMap =
+          segment.initializationMap.map(map => map.copy(uri = resolveUri(map.uri, base)))
+      ))
 
   def resolveMultivariant(playlist: MultivariantPlaylist, base: URI): MultivariantPlaylist =
     playlist.copy(
-      renditions = playlist.renditions.map(rendition => rendition.copy(uri = rendition.uri.map(resolveUri(_, base)))),
+      renditions = playlist.renditions.map(rendition =>
+        rendition.copy(uri = rendition.uri.map(resolveUri(_, base)))
+      ),
       variants = playlist.variants.map(variant => variant.copy(uri = resolveUri(variant.uri, base)))
     )
 
   private def resolveUri(reference: PlaylistUri, base: URI): PlaylistUri =
     PlaylistUri.unsafe(base.resolve(reference.uri).toString)
-

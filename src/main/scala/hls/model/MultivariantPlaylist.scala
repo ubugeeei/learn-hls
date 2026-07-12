@@ -2,9 +2,10 @@ package hls.model
 
 import hls.model.ValueTypes.*
 
-/** The media type of an alternative rendition.
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.4.1 RFC 8216 §4.3.4.1]]
-  */
+/**
+ * The media type of an alternative rendition.
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.4.1 RFC 8216 §4.3.4.1]]
+ */
 enum RenditionType:
   case Audio, Video, Subtitles, ClosedCaptions
 
@@ -21,9 +22,10 @@ final case class Rendition(
     characteristics: Vector[String] = Vector.empty
 )
 
-/** A playable variant described by `EXT-X-STREAM-INF`.
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.4.2 RFC 8216 §4.3.4.2]]
-  */
+/**
+ * A playable variant described by `EXT-X-STREAM-INF`.
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.4.2 RFC 8216 §4.3.4.2]]
+ */
 final case class Variant(
     uri: PlaylistUri,
     bandwidth: Bandwidth,
@@ -45,10 +47,10 @@ final case class MultivariantPlaylist(
     variants: Vector[Variant]
 )
 
-/** The two playlist kinds are mutually exclusive per
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.1.1 RFC 8216 §4.3.1.1]].
-  */
+/**
+ * The two playlist kinds are mutually exclusive per
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.1.1 RFC 8216 §4.3.1.1]].
+ */
 enum Playlist:
   case Media(value: MediaPlaylist)
   case Multivariant(value: MultivariantPlaylist)
-

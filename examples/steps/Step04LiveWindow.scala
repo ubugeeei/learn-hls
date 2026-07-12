@@ -13,4 +13,3 @@ object Step04LiveWindow:
       live.append(MediaSegment(PlaylistUri.unsafe(s"segment$index.ts"), Duration.unsafe(2)))
       println(s"--- after segment $index ---")
       print(PlaylistRenderer.renderMedia(live.snapshot))
-

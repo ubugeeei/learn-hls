@@ -48,18 +48,26 @@ final class PlaylistParserSuite extends munit.FunSuite:
     assert(error.message.contains("#EXTM3U"))
 
   test("reject a media segment longer than target duration after rounding"):
-    val error = PlaylistParser.parse("""#EXTM3U
+    val error = PlaylistParser
+      .parse("""#EXTM3U
       |#EXT-X-TARGETDURATION:4
       |#EXTINF:4.6,
       |too-long.ts
-      |""".stripMargin).left.toOption.get
+      |""".stripMargin)
+      .left
+      .toOption
+      .get
     assert(error.message.contains("rounds above target"))
 
   test("reject dangling rendition group references"):
-    val error = PlaylistParser.parse("""#EXTM3U
+    val error = PlaylistParser
+      .parse("""#EXTM3U
       |#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO="missing"
       |video.m3u8
-      |""".stripMargin).left.toOption.get
+      |""".stripMargin)
+      .left
+      .toOption
+      .get
     assert(error.message.contains("missing rendition group"))
 
   test("resolve a UTF-8 BOM and CRLF"):
@@ -83,7 +91,10 @@ final class PlaylistParserSuite extends munit.FunSuite:
     assertEquals(media.start, Some(StartOffset(BigDecimal("-8.5"), precise = true)))
     assert(media.iFramesOnly)
     assert(media.segments.head.gap)
-    assertEquals(media.segments.head.dateRanges.head.clientAttributes, Map("X-CAMPAIGN" -> "summer"))
+    assertEquals(
+      media.segments.head.dateRanges.head.clientAttributes,
+      Map("X-CAMPAIGN" -> "summer")
+    )
     assertEquals(PlaylistParser.parse(PlaylistRenderer.render(parsed.toOption.get)), parsed)
 
   test("validate END-ON-NEXT date ranges"):

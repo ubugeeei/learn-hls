@@ -11,4 +11,3 @@ object Step01OneSegment:
       |""".stripMargin
 
   @main def printOneSegment(): Unit = print(playlist)
-

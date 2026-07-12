@@ -3,35 +3,45 @@ package hls.model
 import hls.model.ValueTypes.*
 import java.time.OffsetDateTime
 
-/** Indicates whether a Media Playlist can change.
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.3.5 RFC 8216 §4.3.3.5]]
-  */
+/**
+ * Indicates whether a Media Playlist can change.
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.3.5 RFC 8216 §4.3.3.5]]
+ */
 enum PlaylistType:
   case Event, Vod
 
-/** Encryption state applying to subsequent segments.
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.2.4 RFC 8216 §4.3.2.4]]
-  */
+/**
+ * Encryption state applying to subsequent segments.
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.2.4 RFC 8216 §4.3.2.4]]
+ */
 enum Encryption:
   case None
   case Aes128(uri: PlaylistUri, iv: Option[String])
-  case SampleAes(uri: PlaylistUri, keyFormat: Option[String], versions: Option[String], iv: Option[String])
+  case SampleAes(
+      uri: PlaylistUri,
+      keyFormat: Option[String],
+      versions: Option[String],
+      iv: Option[String]
+  )
 
-/** A byte sub-range of a resource. The offset is optional only in source syntax;
-  * parsers resolve implicit offsets before constructing this value.
-  */
+/**
+ * A byte sub-range of a resource. The offset is optional only in source syntax; parsers resolve
+ * implicit offsets before constructing this value.
+ */
 final case class ByteRange(length: Long, offset: Long):
   require(length > 0, "byte range length must be positive")
   require(offset >= 0, "byte range offset must be non-negative")
 
-/** An fMP4 Media Initialization Section.
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.2.5 RFC 8216 §4.3.2.5]]
-  */
+/**
+ * An fMP4 Media Initialization Section.
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-4.3.2.5 RFC 8216 §4.3.2.5]]
+ */
 final case class InitializationMap(uri: PlaylistUri, byteRange: Option[ByteRange] = None)
 
-/** One Media Segment and the tags scoped to it.
-  * [[https://www.rfc-editor.org/rfc/rfc8216#section-3 RFC 8216 §3]]
-  */
+/**
+ * One Media Segment and the tags scoped to it.
+ * [[https://www.rfc-editor.org/rfc/rfc8216#section-3 RFC 8216 §3]]
+ */
 final case class MediaSegment(
     uri: PlaylistUri,
     duration: Duration,
