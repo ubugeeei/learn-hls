@@ -86,6 +86,8 @@ not falsely reported as parser validation.
 | Automatic reload scheduler | Boundary | Caller integrates timing/backoff with its effect system |
 | Media decoding/rendering | Boundary | Platform/player decoder responsibility |
 | Redundant-stream failover | Not covered | Requires multi-origin health policy |
+| AES-128 segment cryptography | Covered | 16-byte key, explicit/derived IV, CBC, PKCS#7 padding |
+| SAMPLE-AES cryptography | Not covered | Requires format-specific subsample encryption |
 
 ## Media segments
 
@@ -98,7 +100,7 @@ not falsely reported as parser validation.
 
 Nested MPEG-TS PAT/PMT/PES parsing, PCR/PTS validation, nested MP4 `tfdt` and
 track-fragment rules, packed-audio codec frames, the complete WebVTT rendering
-model, codec sample validation, and decryption remain missing. The inspectors
+model, codec sample validation, and SAMPLE-AES remain missing. The inspectors
 therefore say **structurally acceptable**, never “playable.”
 
 ## Server and publication

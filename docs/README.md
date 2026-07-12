@@ -67,6 +67,7 @@ See the current [Multivariant Playlist chapter](../docs/03-multivariant-playlist
 Implemented chapter:
 
 - [inspect MPEG-TS and fragmented MP4 structure](40-media/010-inspect-segments.md)
+- [encrypt and decrypt AES-128 segments](40-media/020-aes128-encryption.md)
 
 This part explains enough binary structure to inspect and validate segments. It
 does not attempt to implement video codecs; encoding samples is a distinct and
