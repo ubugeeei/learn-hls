@@ -88,6 +88,14 @@ Practical implementation chapters already available:
 - [conditional live reloads](20-practical/020-conditional-reloads.md)
 - [cache-aware origin delivery](20-practical/030-cache-aware-origin.md)
 
+## Part 6 — HLS 2 and Low-Latency HLS
+
+This part is pinned to the active `draft-pantos-hls-rfc8216bis-22`, not presented
+as finalized RFC behavior.
+
+- [Low-Latency HLS core](50-hls2/010-low-latency-core.md)
+- [blocking reloads and Playlist Delta Updates](50-hls2/020-delivery-directives-and-deltas.md)
+
 See the current [delivery chapter](../docs/06-delivery.md).
 
 ## Checkpoint source

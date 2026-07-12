@@ -119,11 +119,17 @@ not a portable filesystem origin.
 
 ## HLS versions beyond RFC 8216
 
-Low-Latency HLS (`EXT-X-PART`, server-control, preload hints, rendition reports,
-blocking reload, delta updates), content steering, interstitial asset lists,
-variable substitution, and newer immersive/spatial attributes are **not
-covered**. They belong to the evolving HLS 2 drafts and separate Apple
-specifications, not the stable RFC 8216 completeness claim.
+The following core Low-Latency HLS features are covered against
+`draft-pantos-hls-rfc8216bis-22`: `EXT-X-PART-INF`, `EXT-X-SERVER-CONTROL`,
+`EXT-X-PART`, `EXT-X-SKIP`, `EXT-X-PRELOAD-HINT`, `EXT-X-RENDITION-REPORT`,
+Delivery Directives, parent/Part identity, Delta Update reconstruction, URI
+resolution, canonical rendering, and protocol-minimum validation.
+
+Still not covered from HLS 2: `EXT-X-DEFINE` variable substitution,
+`EXT-X-BITRATE`, newer variant/rendition attributes, content steering,
+interstitial asset lists, date-range update semantics, SAMPLE-AES, and newer
+immersive/spatial requirements. They remain separate checklist items rather than
+being hidden inside a broad “HLS 2” claim.
 
 This matrix is the release gate: a future README must not claim broader support
 unless the corresponding row becomes Covered with source links and tests.
