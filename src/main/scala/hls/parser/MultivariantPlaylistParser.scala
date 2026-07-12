@@ -115,7 +115,8 @@ private[parser] object MultivariantPlaylistParser:
         .traverse(value =>
           Try(BigDecimal(value)).toEither.left.map(_ => ParseError(line, "invalid frame rate"))
         )
-      uri <- PlaylistUri.parse(rawUri).left.map(ParseError(line + 1, _))
+      hdcp <- attributes.get("HDCP-LEVEL").traverse(parseHdcp(_, line))
+      uri  <- PlaylistUri.parse(rawUri).left.map(ParseError(line + 1, _))
     yield Variant(
       uri = uri,
       bandwidth = bandwidth,
@@ -131,7 +132,7 @@ private[parser] object MultivariantPlaylistParser:
         .map:
           case "NONE" => ClosedCaptions.None
           case group  => ClosedCaptions.Group(group),
-      hdcpLevel = attributes.get("HDCP-LEVEL").flatMap(parseHdcp)
+      hdcpLevel = hdcp
     )
 
   private def parseRendition(
@@ -186,13 +187,14 @@ private[parser] object MultivariantPlaylistParser:
       resolution <- attributes
         .get("RESOLUTION")
         .traverse(value => Resolution.parse(value).left.map(ParseError(line, _)))
+      hdcp <- attributes.get("HDCP-LEVEL").traverse(parseHdcp(_, line))
     yield IFrameVariant(
       uri,
       bandwidth,
       average,
       attributes.get("CODECS").toVector.flatMap(_.split(',')),
       resolution,
-      attributes.get("HDCP-LEVEL").flatMap(parseHdcp),
+      hdcp,
       attributes.get("VIDEO")
     )
 
@@ -224,10 +226,10 @@ private[parser] object MultivariantPlaylistParser:
             .map(_ => ParseError(line, "invalid start offset"))
         yield StartOffset(seconds, attributes.get("PRECISE").contains("YES"))
 
-  private def parseHdcp(value: String): Option[HdcpLevel] = value match
-    case "TYPE-0" => Some(HdcpLevel.Type0)
-    case "NONE"   => Some(HdcpLevel.None)
-    case _        => None
+  private def parseHdcp(value: String, line: Int): Either[ParseError, HdcpLevel] = value match
+    case "TYPE-0" => Right(HdcpLevel.Type0)
+    case "NONE"   => Right(HdcpLevel.None)
+    case other    => Left(ParseError(line, s"invalid HDCP-LEVEL: $other"))
 
   extension [A](option: Option[A])
     private def traverse[B](function: A => Either[ParseError, B]): Either[ParseError, Option[B]] =
