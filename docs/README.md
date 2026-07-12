@@ -51,6 +51,11 @@ The existing focused references remain useful while Part 2 is expanded:
 - aligned timelines and safe variant switching
 - a small client-side selection algorithm and failure recovery
 
+Implemented chapters:
+
+- [choose a variant without guessing](30-client/010-choose-a-variant.md)
+- [reconcile live snapshots](30-client/020-reconcile-live-snapshots.md)
+
 See the current [Multivariant Playlist chapter](../docs/03-multivariant-playlists.md).
 
 ## Part 4 — Media containers
@@ -58,6 +63,10 @@ See the current [Multivariant Playlist chapter](../docs/03-multivariant-playlist
 - MPEG-TS packets, PAT/PMT, PES, PTS, continuity counters, and segment boundaries
 - ISO Base Media File Format boxes, CMAF fragments, `moof`/`mdat`, and `tfdt`
 - WebVTT timestamp mapping and packed audio timestamps
+
+Implemented chapter:
+
+- [inspect MPEG-TS and fragmented MP4 structure](40-media/010-inspect-segments.md)
 
 This part explains enough binary structure to inspect and validate segments. It
 does not attempt to implement video codecs; encoding samples is a distinct and
@@ -91,3 +100,10 @@ The final library lives in `src/main/scala`. Every `FooSuite.scala` sits beside
 the `Foo.scala` it specifies; build filters keep suites out of production
 artifacts while compiling them in Test scope. Source files stay below roughly
 350 lines so a reader can finish one unit without losing its local context.
+
+## Exact support boundary
+
+The [RFC 8216 coverage matrix](reference/rfc8216-coverage.md) lists every stable
+playlist tag, semantic checks, client behavior, media format, server feature,
+and known omission. Treat that matrix—not the phrase “supports HLS”—as the
+project's completeness claim.
