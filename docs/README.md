@@ -12,21 +12,25 @@ needed. Normative statements link directly to the specification.
 
 ## Part 0 — Getting started
 
-1. [Purpose, audience, and boundaries](00-introduction/010-about.md)
-2. [How to use the book](00-introduction/020-how-to-read.md)
-3. [Set up Scala and run the first test](00-introduction/030-setup.md)
-4. [Map the HLS system before writing it](00-introduction/040-architecture.md)
+1. [Start here: no streaming knowledge required](00-introduction/005-start-here.md)
+2. [Purpose, audience, and boundaries](00-introduction/010-about.md)
+3. [How to use the book](00-introduction/020-how-to-read.md)
+4. [Set up Scala and run the first test](00-introduction/030-setup.md)
+5. [Map the HLS system before writing it](00-introduction/040-architecture.md)
+6. [Media basics: pictures, samples, and containers](00-introduction/045-media-basics.md)
+7. [HTTP basics: requests, responses, and caches](00-introduction/047-http-basics.md)
+8. [Glossary in plain language](00-introduction/050-glossary.md)
 
 ## Part 1 — The smallest HLS
 
-5. [Publish one four-second segment](10-minimum/010-one-segment.md)
-6. [Turn strings into a typed model](10-minimum/020-domain-model.md)
-7. [Render Extended M3U](10-minimum/030-renderer.md)
-8. [Parse untrusted playlists](10-minimum/040-parser.md)
-9. [Validate rules spanning multiple lines](10-minimum/050-validation.md)
-10. [Build and slide a live window](10-minimum/060-live-window.md)
-11. [Serve it over HTTP](10-minimum/070-http-origin.md)
-12. [Minimum-section checkpoint](10-minimum/080-checkpoint.md)
+9. [Publish one four-second segment](10-minimum/010-one-segment.md)
+10. [Turn strings into a typed model](10-minimum/020-domain-model.md)
+11. [Render Extended M3U](10-minimum/030-renderer.md)
+12. [Parse untrusted playlists](10-minimum/040-parser.md)
+13. [Validate rules spanning multiple lines](10-minimum/050-validation.md)
+14. [Build and slide a live window](10-minimum/060-live-window.md)
+15. [Serve it over HTTP](10-minimum/070-http-origin.md)
+16. [Minimum-section checkpoint](10-minimum/080-checkpoint.md)
 
 ## Part 2 — Practical Media Playlists
 
