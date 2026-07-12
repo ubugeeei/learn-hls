@@ -37,6 +37,7 @@ object PlaylistRenderer:
       playlist.skip.map(renderSkip)
     var key: Encryption                    = Encryption.None
     var initMap: Option[InitializationMap] = None
+    var bitrateKbps: Option[Long]          = None
     val body = playlist.segments.zipWithIndex.flatMap: (segment, index) =>
       val sequence =
         playlist.mediaSequence.value + playlist.skip.fold(0L)(_.skippedSegments) + index
@@ -48,7 +49,12 @@ object PlaylistRenderer:
       )
       key = segment.encryption
       initMap = segment.initializationMap
-      keyLine ++ mapLine.filter(_.nonEmpty) ++ partLines ++
+      val bitrateLine =
+        Option.when(segment.bitrateKbps.nonEmpty && segment.bitrateKbps != bitrateKbps)(
+          s"#EXT-X-BITRATE:${segment.bitrateKbps.get}"
+        )
+      segment.bitrateKbps.foreach(rate => bitrateKbps = Some(rate))
+      keyLine ++ mapLine.filter(_.nonEmpty) ++ partLines ++ bitrateLine ++
         segment.dateRanges.map(renderDateRange) ++
         Option.when(segment.discontinuity)("#EXT-X-DISCONTINUITY") ++
         segment.programDateTime.map(date => s"#EXT-X-PROGRAM-DATE-TIME:$date") ++

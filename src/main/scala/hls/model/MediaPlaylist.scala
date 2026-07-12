@@ -52,7 +52,12 @@ final case class MediaSegment(
     initializationMap: Option[InitializationMap] = None,
     programDateTime: Option[OffsetDateTime] = None,
     gap: Boolean = false,
-    dateRanges: Vector[DateRange] = Vector.empty
+    dateRanges: Vector[DateRange] = Vector.empty,
+    /**
+     * Approximate rate in kilobits per second; absent for byte-range segments.
+     * [[https://datatracker.ietf.org/doc/html/draft-pantos-hls-rfc8216bis-22#section-4.4.4.8 HLS 2 draft-22 §4.4.4.8]]
+     */
+    bitrateKbps: Option[Long] = None
 )
 
 /** A complete Media Playlist. Construction is validated by [[hls.validation.PlaylistValidator]]. */

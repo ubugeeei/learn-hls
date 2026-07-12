@@ -6,6 +6,44 @@ import hls.model.ValueTypes.*
 import hls.render.PlaylistRenderer
 
 final class PlaylistParserSuite extends munit.FunSuite:
+  test("EXT-X-BITRATE scopes across ordinary segments but not byte-range segments"):
+    val source =
+      """#EXTM3U
+        |#EXT-X-TARGETDURATION:4
+        |#EXT-X-BITRATE:800
+        |#EXTINF:4,
+        |first.ts
+        |#EXTINF:4,
+        |second.ts
+        |#EXTINF:4,
+        |#EXT-X-BYTERANGE:100@0
+        |combined.ts
+        |#EXTINF:4,
+        |third.ts
+        |#EXT-X-BITRATE:1200
+        |#EXTINF:4,
+        |fourth.ts
+        |#EXT-X-ENDLIST
+        |""".stripMargin
+
+    val parsed = PlaylistParser.parse(source).toOption.get.asInstanceOf[Playlist.Media].value
+
+    assertEquals(
+      parsed.segments.map(_.bitrateKbps),
+      Vector(Some(800L), Some(800L), None, Some(800L), Some(1200L))
+    )
+    assertEquals(
+      PlaylistParser.parse(PlaylistRenderer.renderMedia(parsed)),
+      Right(Playlist.Media(parsed))
+    )
+
+  test("EXT-X-BITRATE rejects zero, negative, and non-integer rates"):
+    List("0", "-1", "1.5").foreach: rate =>
+      val source = s"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-BITRATE:$rate\n"
+      assert(
+        PlaylistParser.parse(source).left.toOption.get.message.contains("invalid EXT-X-BITRATE")
+      )
+
   test("parse an encrypted fMP4 VOD media playlist and round trip"):
     val source = """#EXTM3U
       |#EXT-X-VERSION:7

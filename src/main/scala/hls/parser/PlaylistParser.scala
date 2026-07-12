@@ -77,6 +77,7 @@ object PlaylistParser:
     var skip: Option[PlaylistSkip]               = None
     var encryption: Encryption                   = Encryption.None
     var initMap: Option[InitializationMap]       = None
+    var bitrateKbps: Option[Long]                = None
     var pending                                  = Pending()
     var previousRangeEnd: Option[Long]           = None
     var previousPartRangeEnd: Option[Long]       = None
@@ -215,6 +216,11 @@ object PlaylistParser:
                 .map(_ => ParseError(index + 1, "invalid program date-time"))
                 .map: date =>
                   pending = pending.copy(programDateTime = Some(date))
+            else if line.startsWith("#EXT-X-BITRATE:") then
+              value(line).toLongOption
+                .filter(_ > 0)
+                .toRight(ParseError(index + 1, "invalid EXT-X-BITRATE rate"))
+                .map(rate => bitrateKbps = Some(rate))
             else if line.startsWith("#EXT-X-DATERANGE:") then
               StandardTagParser
                 .dateRange(value(line), index + 1)
@@ -247,7 +253,8 @@ object PlaylistParser:
                         initMap,
                         pending.programDateTime,
                         pending.gap,
-                        pending.dateRanges
+                        pending.dateRanges,
+                        bitrateKbps.filter(_ => pending.byteRange.isEmpty)
                       )
                       previousRangeEnd = pending.byteRange.map(r => r.offset + r.length)
                       pending = Pending()
