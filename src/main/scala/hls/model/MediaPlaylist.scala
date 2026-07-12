@@ -66,5 +66,11 @@ final case class MediaPlaylist(
     segments: Vector[MediaSegment],
     ended: Boolean = false,
     start: Option[StartOffset] = None,
-    iFramesOnly: Boolean = false
+    iFramesOnly: Boolean = false,
+    partInformation: Option[PartInformation] = None,
+    serverControl: Option[ServerControl] = None,
+    partialSegments: Vector[PartialSegment] = Vector.empty,
+    skip: Option[PlaylistSkip] = None,
+    preloadHints: Vector[PreloadHint] = Vector.empty,
+    renditionReports: Vector[RenditionReport] = Vector.empty
 )

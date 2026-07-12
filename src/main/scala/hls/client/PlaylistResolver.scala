@@ -18,17 +18,24 @@ object PlaylistResolver:
     case Playlist.Multivariant(value) => Playlist.Multivariant(resolveMultivariant(value, base))
 
   def resolveMedia(playlist: MediaPlaylist, base: URI): MediaPlaylist =
-    playlist.copy(segments = playlist.segments.map: segment =>
-      segment.copy(
-        uri = resolveUri(segment.uri, base),
-        encryption = segment.encryption match
-          case Encryption.None            => Encryption.None
-          case Encryption.Aes128(uri, iv) => Encryption.Aes128(resolveUri(uri, base), iv)
-          case Encryption.SampleAes(uri, format, versions, iv) =>
-            Encryption.SampleAes(resolveUri(uri, base), format, versions, iv),
-        initializationMap =
-          segment.initializationMap.map(map => map.copy(uri = resolveUri(map.uri, base)))
-      ))
+    playlist.copy(
+      segments = playlist.segments.map: segment =>
+        segment.copy(
+          uri = resolveUri(segment.uri, base),
+          encryption = segment.encryption match
+            case Encryption.None            => Encryption.None
+            case Encryption.Aes128(uri, iv) => Encryption.Aes128(resolveUri(uri, base), iv)
+            case Encryption.SampleAes(uri, format, versions, iv) =>
+              Encryption.SampleAes(resolveUri(uri, base), format, versions, iv),
+          initializationMap =
+            segment.initializationMap.map(map => map.copy(uri = resolveUri(map.uri, base)))
+        ),
+      partialSegments =
+        playlist.partialSegments.map(part => part.copy(uri = resolveUri(part.uri, base))),
+      preloadHints = playlist.preloadHints.map(hint => hint.copy(uri = resolveUri(hint.uri, base))),
+      renditionReports =
+        playlist.renditionReports.map(report => report.copy(uri = resolveUri(report.uri, base)))
+    )
 
   def resolveMultivariant(playlist: MultivariantPlaylist, base: URI): MultivariantPlaylist =
     playlist.copy(

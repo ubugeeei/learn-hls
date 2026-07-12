@@ -151,3 +151,48 @@ final class PlaylistParserSuite extends munit.FunSuite:
         |""".stripMargin
       val error = PlaylistParser.parse(source).left.toOption.get
       assert(error.message.contains(example.expected), clues(example, error))
+
+  test("parse and round-trip draft-22 Low-Latency HLS tags"):
+    val source = """#EXTM3U
+      |#EXT-X-VERSION:10
+      |#EXT-X-TARGETDURATION:4
+      |#EXT-X-PART-INF:PART-TARGET=1
+      |#EXT-X-SERVER-CONTROL:CAN-BLOCK-RELOAD=YES,CAN-SKIP-UNTIL=24,CAN-SKIP-DATERANGES=YES,HOLD-BACK=12,PART-HOLD-BACK=3
+      |#EXT-X-MEDIA-SEQUENCE:100
+      |#EXT-X-SKIP:SKIPPED-SEGMENTS=2,RECENTLY-REMOVED-DATERANGES="old-ad\told-chapter"
+      |#EXT-X-PART:DURATION=1,URI="part102.0.m4s",INDEPENDENT=YES,BYTERANGE="100@0"
+      |#EXT-X-PART:DURATION=1,URI="part102.1.m4s",BYTERANGE="120"
+      |#EXTINF:2,
+      |segment102.m4s
+      |#EXT-X-PART:DURATION=1,URI="part103.0.m4s",INDEPENDENT=YES
+      |#EXT-X-PRELOAD-HINT:TYPE=PART,URI="part103.1.m4s",BYTERANGE-START=0
+      |#EXT-X-RENDITION-REPORT:URI="../720p/index.m3u8",LAST-MSN=103,LAST-PART=0
+      |""".stripMargin.replace("\\t", "\t")
+    val parsed = PlaylistParser.parse(source)
+    assert(parsed.isRight, parsed.left.toOption.map(_.toString).getOrElse(""))
+    val media = parsed.toOption.get.asInstanceOf[Playlist.Media].value
+    assertEquals(media.partialSegments.map(_.parentMediaSequence), Vector(102L, 102L, 103L))
+    assertEquals(media.partialSegments.map(_.partIndex), Vector(0, 1, 0))
+    assertEquals(media.partialSegments(1).byteRange, Some(ByteRange(120, 100)))
+    assertEquals(
+      media.skip.map(_.recentlyRemovedDateRangeIds),
+      Some(Vector("old-ad", "old-chapter"))
+    )
+    assertEquals(media.preloadHints.size, 1)
+    assertEquals(media.renditionReports.head.lastPart, Some(0))
+    assertEquals(PlaylistParser.parse(PlaylistRenderer.render(parsed.toOption.get)), parsed)
+
+  test("reject invalid Low-Latency hold-back and terminal preload combinations"):
+    val source = """#EXTM3U
+      |#EXT-X-VERSION:10
+      |#EXT-X-TARGETDURATION:4
+      |#EXT-X-PART-INF:PART-TARGET=1
+      |#EXT-X-SERVER-CONTROL:CAN-SKIP-DATERANGES=YES,CAN-SKIP-UNTIL=4,PART-HOLD-BACK=1
+      |#EXT-X-PRELOAD-HINT:TYPE=PART,URI="next.m4s"
+      |#EXT-X-ENDLIST
+      |""".stripMargin
+    val error = PlaylistParser.parse(source).left.toOption.get
+    assert(
+      Vector("CAN-SKIP-UNTIL", "PART-HOLD-BACK", "preload hints").exists(error.message.contains),
+      clues(error)
+    )

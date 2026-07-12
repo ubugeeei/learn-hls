@@ -53,8 +53,8 @@ private[parser] object MultivariantPlaylistParser:
                 .flatMap(parseSessionData(_, index + 1))
                 .map(sessionData += _)
             else if line.startsWith("#EXT-X-SESSION-KEY:") then
-              PlaylistParser
-                .parseKey(line.drop(19), index + 1)
+              StandardTagParser
+                .key(line.drop(19), index + 1)
                 .flatMap:
                   case Encryption.None =>
                     Left(ParseError(index + 1, "SESSION-KEY forbids METHOD=NONE"))

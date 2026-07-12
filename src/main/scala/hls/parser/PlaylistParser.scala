@@ -45,20 +45,29 @@ object PlaylistParser:
   )
 
   private def parseMedia(lines: Vector[String]): Either[ParseError, Playlist] =
-    var version: Option[Int]               = None
-    var target: Option[Long]               = None
-    var sequence                           = MediaSequence.unsafe(0)
-    var discontinuitySequence              = 0L
-    var playlistType: Option[PlaylistType] = None
-    var independent                        = false
-    var ended                              = false
-    var start: Option[StartOffset]         = None
-    var iFramesOnly                        = false
-    var encryption: Encryption             = Encryption.None
-    var initMap: Option[InitializationMap] = None
-    var pending                            = Pending()
-    var previousRangeEnd: Option[Long]     = None
-    val segments                           = Vector.newBuilder[MediaSegment]
+    var version: Option[Int]                     = None
+    var target: Option[Long]                     = None
+    var sequence                                 = MediaSequence.unsafe(0)
+    var discontinuitySequence                    = 0L
+    var playlistType: Option[PlaylistType]       = None
+    var independent                              = false
+    var ended                                    = false
+    var start: Option[StartOffset]               = None
+    var iFramesOnly                              = false
+    var partInformation: Option[PartInformation] = None
+    var serverControl: Option[ServerControl]     = None
+    var skip: Option[PlaylistSkip]               = None
+    var encryption: Encryption                   = Encryption.None
+    var initMap: Option[InitializationMap]       = None
+    var pending                                  = Pending()
+    var previousRangeEnd: Option[Long]           = None
+    var previousPartRangeEnd: Option[Long]       = None
+    var completedSegments                        = 0L
+    var currentPartIndex                         = 0
+    val segments                                 = Vector.newBuilder[MediaSegment]
+    val partialSegments                          = Vector.newBuilder[PartialSegment]
+    val preloadHints                             = Vector.newBuilder[PreloadHint]
+    val renditionReports                         = Vector.newBuilder[RenditionReport]
 
     def fail[A](index: Int, message: String): Either[ParseError, A] = Left(
       ParseError(index + 1, message)
@@ -117,6 +126,39 @@ object PlaylistParser:
             else if line == "#EXT-X-I-FRAMES-ONLY" then
               iFramesOnly = true
               Right(())
+            else if line.startsWith("#EXT-X-PART-INF:") then
+              if partInformation.nonEmpty then fail(index, "duplicate EXT-X-PART-INF")
+              else
+                LowLatencyParser
+                  .partInformation(value(line), index + 1)
+                  .map(parsed => partInformation = Some(parsed))
+            else if line.startsWith("#EXT-X-SERVER-CONTROL:") then
+              if serverControl.nonEmpty then fail(index, "duplicate EXT-X-SERVER-CONTROL")
+              else
+                LowLatencyParser
+                  .serverControl(value(line), index + 1)
+                  .map(parsed => serverControl = Some(parsed))
+            else if line.startsWith("#EXT-X-PART:") then
+              val parent = sequence.value + skip.fold(0L)(_.skippedSegments) + completedSegments
+              LowLatencyParser
+                .partialSegment(
+                  value(line),
+                  index + 1,
+                  parent,
+                  currentPartIndex,
+                  previousPartRangeEnd
+                )
+                .map: part =>
+                  partialSegments += part
+                  currentPartIndex += 1
+                  previousPartRangeEnd = part.byteRange.map(range => range.offset + range.length)
+            else if line.startsWith("#EXT-X-SKIP:") then
+              if skip.nonEmpty then fail(index, "duplicate EXT-X-SKIP")
+              else LowLatencyParser.skip(value(line), index + 1).map(parsed => skip = Some(parsed))
+            else if line.startsWith("#EXT-X-PRELOAD-HINT:") then
+              LowLatencyParser.preloadHint(value(line), index + 1).map(preloadHints += _)
+            else if line.startsWith("#EXT-X-RENDITION-REPORT:") then
+              LowLatencyParser.renditionReport(value(line), index + 1).map(renditionReports += _)
             else if line.startsWith("#EXT-X-PLAYLIST-TYPE:") then
               value(line) match
                 case "EVENT" => playlistType = Some(PlaylistType.Event); Right(())
@@ -156,14 +198,17 @@ object PlaylistParser:
                 .map: date =>
                   pending = pending.copy(programDateTime = Some(date))
             else if line.startsWith("#EXT-X-DATERANGE:") then
-              parseDateRange(value(line), index + 1)
+              StandardTagParser
+                .dateRange(value(line), index + 1)
                 .map(range => pending = pending.copy(dateRanges = pending.dateRanges :+ range))
             else if line.startsWith("#EXT-X-START:") then
-              parseStart(value(line), index + 1).map(offset => start = Some(offset))
+              StandardTagParser.start(value(line), index + 1).map(offset => start = Some(offset))
             else if line.startsWith("#EXT-X-KEY:") then
-              parseKey(value(line), index + 1).map(encryption = _)
+              StandardTagParser.key(value(line), index + 1).map(encryption = _)
             else if line.startsWith("#EXT-X-MAP:") then
-              parseMap(value(line), index + 1).map(map => initMap = Some(map))
+              StandardTagParser
+                .initializationMap(value(line), index + 1)
+                .map(map => initMap = Some(map))
             else if line.startsWith("#") then Right(())
             else
               pending.duration match
@@ -188,6 +233,9 @@ object PlaylistParser:
                       )
                       previousRangeEnd = pending.byteRange.map(r => r.offset + r.length)
                       pending = Pending()
+                      completedSegments += 1
+                      currentPartIndex = 0
+                      previousPartRangeEnd = None
       .flatMap: _ =>
         if pending.duration.nonEmpty then
           Left(ParseError(lines.length, "EXTINF has no following URI"))
@@ -205,7 +253,13 @@ object PlaylistParser:
                 segments.result(),
                 ended,
                 start,
-                iFramesOnly
+                iFramesOnly,
+                partInformation,
+                serverControl,
+                partialSegments.result(),
+                skip,
+                preloadHints.result(),
+                renditionReports.result()
               )
               PlaylistValidator
                 .validateMedia(playlist)
@@ -213,101 +267,3 @@ object PlaylistParser:
                 .toLeft(Playlist.Media(playlist))
                 .left
                 .map(ParseError(0, _))
-
-  private[parser] def parseKey(input: String, line: Int): Either[ParseError, Encryption] =
-    AttributeList
-      .parse(input, line)
-      .flatMap: a =>
-        a.get("METHOD") match
-          case Some("NONE")                              => Right(Encryption.None)
-          case Some(method @ ("AES-128" | "SAMPLE-AES")) =>
-            for
-              rawUri <- a.get("URI").toRight(ParseError(line, s"$method requires URI"))
-              uri    <- PlaylistUri.parse(rawUri).left.map(ParseError(line, _))
-            yield
-              if method == "AES-128" then Encryption.Aes128(uri, a.get("IV"))
-              else
-                Encryption.SampleAes(
-                  uri,
-                  a.get("KEYFORMAT"),
-                  a.get("KEYFORMATVERSIONS"),
-                  a.get("IV")
-                )
-          case Some(other) => Left(ParseError(line, s"unsupported encryption method: $other"))
-          case None        => Left(ParseError(line, "EXT-X-KEY requires METHOD"))
-
-  private def parseMap(input: String, line: Int): Either[ParseError, InitializationMap] =
-    AttributeList
-      .parse(input, line)
-      .flatMap: a =>
-        for
-          rawUri <- a.get("URI").toRight(ParseError(line, "EXT-X-MAP requires URI"))
-          uri    <- PlaylistUri.parse(rawUri).left.map(ParseError(line, _))
-          range  <- a.get("BYTERANGE").traverse(parseExplicitRange(_, line))
-        yield InitializationMap(uri, range)
-
-  private def parseExplicitRange(value: String, line: Int): Either[ParseError, ByteRange] =
-    value.split('@').toList match
-      case length :: offset :: Nil =>
-        for
-          l <- length.toLongOption.filter(_ > 0).toRight(ParseError(line, "invalid byte range"))
-          o <- offset.toLongOption.filter(_ >= 0).toRight(ParseError(line, "invalid byte range"))
-        yield ByteRange(l, o)
-      case _ => Left(ParseError(line, "map byte range requires an explicit offset"))
-
-  private def parseStart(input: String, line: Int): Either[ParseError, StartOffset] =
-    AttributeList
-      .parse(input, line)
-      .flatMap: attributes =>
-        for
-          raw <- attributes
-            .get("TIME-OFFSET")
-            .toRight(ParseError(line, "EXT-X-START requires TIME-OFFSET"))
-          seconds <- Try(BigDecimal(raw)).toEither.left
-            .map(_ => ParseError(line, "invalid start offset"))
-        yield StartOffset(seconds, attributes.get("PRECISE").contains("YES"))
-
-  private def parseDateRange(input: String, line: Int): Either[ParseError, DateRange] =
-    AttributeList
-      .parse(input, line)
-      .flatMap: a =>
-        def date(name: String): Either[ParseError, Option[OffsetDateTime]] =
-          a.get(name)
-            .traverse(value =>
-              Try(OffsetDateTime.parse(value)).toEither.left
-                .map(_ => ParseError(line, s"invalid $name"))
-            )
-        def duration(name: String): Either[ParseError, Option[Duration]] =
-          a.get(name).traverse(value => Duration.parse(value).left.map(ParseError(line, _)))
-        for
-          id <- a
-            .get("ID")
-            .filter(_.nonEmpty)
-            .toRight(ParseError(line, "EXT-X-DATERANGE requires ID"))
-          rawStart <- a
-            .get("START-DATE")
-            .toRight(ParseError(line, "EXT-X-DATERANGE requires START-DATE"))
-          startDate <- Try(OffsetDateTime.parse(rawStart)).toEither.left
-            .map(_ => ParseError(line, "invalid START-DATE"))
-          endDate        <- date("END-DATE")
-          actualDuration <- duration("DURATION")
-          planned        <- duration("PLANNED-DURATION")
-        yield DateRange(
-          id,
-          startDate,
-          a.get("CLASS"),
-          endDate,
-          actualDuration,
-          planned,
-          a.get("END-ON-NEXT").contains("YES"),
-          a.get("SCTE35-CMD"),
-          a.get("SCTE35-OUT"),
-          a.get("SCTE35-IN"),
-          a.filter((name, _) => name.startsWith("X-"))
-        )
-
-  extension [A](option: Option[A])
-    private def traverse[B](function: A => Either[ParseError, B]): Either[ParseError, Option[B]] =
-      option match
-        case Some(value) => function(value).map(Some(_))
-        case None        => Right(None)

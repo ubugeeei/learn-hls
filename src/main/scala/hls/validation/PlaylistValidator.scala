@@ -39,7 +39,7 @@ object PlaylistValidator:
             s"END-ON-NEXT date range requires CLASS: ${range.id}"
           case range if range.endOnNext && (range.duration.nonEmpty || range.endDate.nonEmpty) =>
             s"END-ON-NEXT date range cannot have END-DATE or DURATION: ${range.id}"
-    targetErrors ++ typeErrors ++ versionErrors ++ dateRangeErrors
+    targetErrors ++ typeErrors ++ versionErrors ++ dateRangeErrors ++ validateLowLatency(playlist)
 
   def validateMultivariant(playlist: MultivariantPlaylist): Vector[String] =
     val groups     = playlist.renditions.map(_.groupId).toSet
@@ -91,4 +91,62 @@ object PlaylistValidator:
           case Encryption.SampleAes(_, Some(_), _, _) => true
           case _                                      => false)(5)
       ).flatten
-    versions.maxOption
+    val playlistVersions = Vector(
+      Option.when(playlist.skip.nonEmpty)(9),
+      Option.when(
+        playlist.partInformation.nonEmpty || playlist.serverControl.nonEmpty ||
+          playlist.partialSegments.nonEmpty || playlist.preloadHints.nonEmpty ||
+          playlist.renditionReports.nonEmpty
+      )(10)
+    ).flatten
+    (versions ++ playlistVersions).maxOption
+
+  private def validateLowLatency(playlist: MediaPlaylist): Vector[String] =
+    val partTarget = playlist.partInformation.map(_.partTarget.decimal)
+    val target     = BigDecimal(playlist.targetDurationSeconds)
+    val errors     = Vector.newBuilder[String]
+    if playlist.partialSegments.nonEmpty && playlist.partInformation.isEmpty then
+      errors += "partial segments require EXT-X-PART-INF"
+    if playlist.partInformation.nonEmpty && playlist.serverControl.flatMap(_.partHoldBack).isEmpty
+    then errors += "EXT-X-PART-INF requires SERVER-CONTROL PART-HOLD-BACK"
+    partTarget.filter(_ <= 0).foreach(_ => errors += "part target duration must be positive")
+    playlist.partialSegments.foreach: part =>
+      partTarget.foreach(maximum =>
+        if part.duration.decimal > maximum then
+          errors += s"part ${part.parentMediaSequence}/${part.partIndex} exceeds part target"
+      )
+    playlist.partialSegments
+      .groupBy(_.parentMediaSequence)
+      .foreach: (parent, parts) =>
+        val indexes = parts.sortBy(_.partIndex).map(_.partIndex)
+        if indexes != indexes.indices.toVector then
+          errors += s"part indexes are not contiguous for parent $parent"
+    playlist.serverControl.foreach: control =>
+      if control.canSkipDateRanges && control.canSkipUntil.isEmpty then
+        errors += "CAN-SKIP-DATERANGES requires CAN-SKIP-UNTIL"
+      control.canSkipUntil.foreach(value =>
+        if value.decimal < target * 6 then
+          errors += "CAN-SKIP-UNTIL must be at least six target durations"
+      )
+      control.holdBack.foreach(value =>
+        if value.decimal < target * 3 then
+          errors += "HOLD-BACK must be at least three target durations"
+      )
+      for
+        holdBack <- control.partHoldBack
+        maximum  <- partTarget
+        if holdBack.decimal < maximum * 2
+      do errors += "PART-HOLD-BACK must be at least two part target durations"
+    if playlist.ended && playlist.preloadHints.nonEmpty then
+      errors += "ended playlists cannot contain preload hints"
+    playlist.preloadHints
+      .groupBy(_.hintType)
+      .collect:
+        case (hintType, hints) if hints.size > 1 =>
+          errors += s"duplicate preload hint TYPE: $hintType"
+    playlist.renditionReports.foreach: report =>
+      if report.uri.uri.isAbsolute then
+        errors += s"rendition report URI must be relative: ${report.uri}"
+      if report.lastPart.nonEmpty && report.lastMediaSequence.isEmpty then
+        errors += s"rendition report LAST-PART requires LAST-MSN: ${report.uri}"
+    errors.result()
