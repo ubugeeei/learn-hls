@@ -83,7 +83,9 @@ not falsely reported as parser validation.
 | Snapshot reconciliation | Covered | append, eviction, rewind, overlap inconsistency |
 | Variant admission/ranking | Covered | codec, resolution, bandwidth safety fraction |
 | Throughput estimation | Boundary | Caller supplies an estimate from its transfer measurements |
-| Automatic reload scheduler | Boundary | Caller integrates timing/backoff with its effect system |
+| Reload timing decision | Covered | initial/changed target duration, unchanged half-target, request-start basis, stop conditions |
+| Scheduling mechanism | Boundary | Caller integrates returned earliest instant with its effect system |
+| Next-segment selection | Covered | absolute sequence, wait, end, and fell-behind states |
 | Media decoding/rendering | Boundary | Platform/player decoder responsibility |
 | Redundant-stream failover | Covered | immutable health, preferred source, retry classification, exponential cooldown, conditional-to-fresh fallback |
 | AES-128 segment cryptography | Covered | 16-byte key, explicit/derived IV, CBC, PKCS#7 padding |

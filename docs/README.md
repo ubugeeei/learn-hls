@@ -56,6 +56,7 @@ Implemented chapters:
 - [choose a variant without guessing](30-client/010-choose-a-variant.md)
 - [reconcile live snapshots](30-client/020-reconcile-live-snapshots.md)
 - [fail over redundant origins](30-client/030-fail-over-origins.md)
+- [schedule live reloads and select the next segment](30-client/040-schedule-live-reloads.md)
 
 See the current [Multivariant Playlist chapter](../docs/03-multivariant-playlists.md).
 
