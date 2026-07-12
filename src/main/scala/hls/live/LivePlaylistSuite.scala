@@ -1,3 +1,4 @@
+//> using target.scope test
 package hls.live
 
 import hls.builder.MediaPlaylistBuilder
@@ -23,4 +24,3 @@ final class LivePlaylistSuite extends munit.FunSuite:
     val result = MediaPlaylistBuilder.create(2).toOption.get.add(segment(0).copy(duration = Duration.unsafe(3))).asVod.build
     assert(result.isLeft)
     assert(result.left.toOption.get.exists(_.contains("target duration")))
-

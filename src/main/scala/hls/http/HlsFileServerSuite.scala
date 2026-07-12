@@ -1,3 +1,4 @@
+//> using target.scope test
 package hls.http
 
 import java.net.URI
@@ -37,4 +38,3 @@ final class HlsFileServerSuite extends munit.FunSuite:
       val response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.discarding())
       assertEquals(response.statusCode(), 404)
     finally server.stop()
-

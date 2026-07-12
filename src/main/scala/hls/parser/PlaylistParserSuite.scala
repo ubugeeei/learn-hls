@@ -1,3 +1,4 @@
+//> using target.scope test
 package hls.parser
 
 import hls.model.*
