@@ -30,7 +30,7 @@ object PlaylistParser:
           if lines.exists(_.startsWith("#EXT-X-STREAM-INF:")) || lines.exists(
             _.startsWith("#EXT-X-MEDIA:")
           ) =>
-        parseMultivariant(lines)
+        MultivariantPlaylistParser.parse(lines)
       case _ => parseMedia(lines)
 
   private final case class Pending(
@@ -212,61 +212,6 @@ object PlaylistParser:
                 .left
                 .map(ParseError(0, _))
 
-  private def parseMultivariant(lines: Vector[String]): Either[ParseError, Playlist] =
-    var version: Option[Int]                        = None
-    var independent                                 = false
-    val variants                                    = Vector.newBuilder[Variant]
-    val renditions                                  = Vector.newBuilder[Rendition]
-    var pending: Option[(Int, Map[String, String])] = None
-    lines.zipWithIndex
-      .drop(1)
-      .foldLeft[Either[ParseError, Unit]](Right(())):
-        case (result, (line, index)) =>
-          result.flatMap: _ =>
-            if line.startsWith("#EXT-X-VERSION:") then
-              line
-                .drop(15)
-                .toIntOption
-                .toRight(ParseError(index + 1, "invalid version"))
-                .map(v => version = Some(v))
-            else if line == "#EXT-X-INDEPENDENT-SEGMENTS" then
-              independent = true
-              Right(())
-            else if line.startsWith("#EXT-X-MEDIA:") then
-              AttributeList
-                .parse(line.drop(13), index + 1)
-                .flatMap(parseRendition(_, index + 1))
-                .map(renditions += _)
-            else if line.startsWith("#EXT-X-STREAM-INF:") then
-              if pending.nonEmpty then Left(ParseError(index + 1, "variant has no URI"))
-              else
-                AttributeList
-                  .parse(line.drop(18), index + 1)
-                  .map(a => pending = Some(index + 1 -> a))
-            else if line.startsWith("#EXT-X-TARGETDURATION:") || line.startsWith("#EXTINF:") then
-              Left(ParseError(index + 1, "media and multivariant tags cannot be mixed"))
-            else if line.isEmpty || line.startsWith("#") then Right(())
-            else
-              pending match
-                case None                        => Left(ParseError(index + 1, "unexpected URI"))
-                case Some((tagLine, attributes)) =>
-                  parseVariant(attributes, line, tagLine).map: variant =>
-                    variants += variant
-                    pending = None
-      .flatMap: _ =>
-        pending.fold[Either[ParseError, Unit]](Right(()))((line, _) =>
-          Left(ParseError(line, "variant has no URI"))
-        )
-      .flatMap: _ =>
-        val playlist =
-          MultivariantPlaylist(version, independent, renditions.result(), variants.result())
-        PlaylistValidator
-          .validateMultivariant(playlist)
-          .headOption
-          .toLeft(Playlist.Multivariant(playlist))
-          .left
-          .map(ParseError(0, _))
-
   private def parseKey(input: String, line: Int): Either[ParseError, Encryption] =
     AttributeList
       .parse(input, line)
@@ -358,65 +303,6 @@ object PlaylistParser:
           a.get("SCTE35-IN"),
           a.filter((name, _) => name.startsWith("X-"))
         )
-
-  private def parseVariant(
-      a: Map[String, String],
-      rawUri: String,
-      line: Int
-  ): Either[ParseError, Variant] =
-    for
-      rawBandwidth <- a.get("BANDWIDTH").toRight(ParseError(line, "STREAM-INF requires BANDWIDTH"))
-      bandwidth    <- Bandwidth.parse(rawBandwidth).left.map(ParseError(line, _))
-      average      <- a
-        .get("AVERAGE-BANDWIDTH")
-        .traverse(v => Bandwidth.parse(v).left.map(ParseError(line, _)))
-      resolution <- a
-        .get("RESOLUTION")
-        .traverse(v => Resolution.parse(v).left.map(ParseError(line, _)))
-      frameRate <- a
-        .get("FRAME-RATE")
-        .traverse(v =>
-          Try(BigDecimal(v)).toEither.left.map(_ => ParseError(line, "invalid frame rate"))
-        )
-      uri <- PlaylistUri.parse(rawUri).left.map(ParseError(line + 1, _))
-    yield Variant(
-      uri,
-      bandwidth,
-      average,
-      a.get("CODECS").toVector.flatMap(_.split(',')),
-      resolution,
-      frameRate,
-      a.get("AUDIO"),
-      a.get("VIDEO"),
-      a.get("SUBTITLES"),
-      a.get("CLOSED-CAPTIONS")
-    )
-
-  private def parseRendition(a: Map[String, String], line: Int): Either[ParseError, Rendition] =
-    def required(name: String) = a.get(name).toRight(ParseError(line, s"MEDIA requires $name"))
-    def yes(name: String)      = a.get(name).contains("YES")
-    for
-      rawType   <- required("TYPE")
-      mediaType <- rawType match
-        case "AUDIO"           => Right(RenditionType.Audio)
-        case "VIDEO"           => Right(RenditionType.Video)
-        case "SUBTITLES"       => Right(RenditionType.Subtitles)
-        case "CLOSED-CAPTIONS" => Right(RenditionType.ClosedCaptions)
-        case other             => Left(ParseError(line, s"invalid rendition type: $other"))
-      group <- required("GROUP-ID")
-      name  <- required("NAME")
-      uri   <- a.get("URI").traverse(v => PlaylistUri.parse(v).left.map(ParseError(line, _)))
-    yield Rendition(
-      mediaType,
-      group,
-      name,
-      uri,
-      a.get("LANGUAGE"),
-      yes("DEFAULT"),
-      yes("AUTOSELECT"),
-      yes("FORCED"),
-      a.get("CHARACTERISTICS").toVector.flatMap(_.split(','))
-    )
 
   extension [A](option: Option[A])
     private def traverse[B](function: A => Either[ParseError, B]): Either[ParseError, Option[B]] =
