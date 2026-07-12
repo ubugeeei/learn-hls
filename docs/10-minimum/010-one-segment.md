@@ -1,7 +1,17 @@
 # Publish one four-second segment
 
+> **Before this chapter:** read [Start here](../00-introduction/005-start-here.md).
+> You only need the meanings of *playlist* and *segment*.
+
 Our first goal is intentionally tiny: describe one already-encoded MPEG-TS file
 and mark the presentation complete.
+
+```mermaid
+flowchart LR
+    Playlist["index.m3u8<br/>says: play segment0.ts"] --> Segment["segment0.ts<br/>contains about 4 seconds"]
+    Player["Player"] --> Playlist
+    Player --> Segment
+```
 
 ```m3u8
 #EXTM3U
@@ -46,4 +56,3 @@ as errors rather than playable output.
 
 Change `4` to `4.6` in `EXTINF` but keep target duration `4`. Predict whether the
 playlist is valid, then read the exact rounding rule in RFC 8216 §4.3.3.1.
-

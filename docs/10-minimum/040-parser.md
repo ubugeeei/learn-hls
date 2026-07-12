@@ -1,5 +1,9 @@
 # Parse untrusted playlists
 
+> **Before this chapter:** you should know that a playlist is ordered text and
+> that some tags describe the URI on the following line. No compiler theory is
+> required.
+
 A parser receives network text, so every assumption becomes an error path. Run
 [Step03ParsePlaylist.scala](../../examples/steps/Step03ParsePlaylist.scala):
 
@@ -8,6 +12,17 @@ scala-cli --power run . --server=false --main-class examples.steps.parsePlaylist
 ```
 
 The result is either a line-numbered `ParseError` or a typed `Playlist`.
+
+```mermaid
+flowchart LR
+    Bytes["UTF-8 text"] --> Lines["Ordered lines"]
+    Lines --> Syntax["Parse tag values"]
+    Syntax --> State["Apply one-shot and persistent state"]
+    State --> Model["Typed Playlist"]
+    Model --> Rules["Cross-line validation"]
+    Syntax -. failure .-> Error["ParseError with line number"]
+    Rules -. failure .-> Error
+```
 
 ## Why line splitting is only the first step
 
@@ -36,4 +51,3 @@ an authoring error into surprising playback.
 Feed the parser `CODECS="a,b` without the closing quote, then a duplicated
 `BANDWIDTH`. Check that both failures point to the tag line rather than a later
 variant URI.
-

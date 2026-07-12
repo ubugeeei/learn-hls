@@ -1,9 +1,23 @@
 # Load a real playlist over HTTP
 
+> **Before this chapter:** read [HTTP basics](../00-introduction/047-http-basics.md)
+> and look up *relative URI* in the [glossary](../00-introduction/050-glossary.md).
+
 Passing a string to `PlaylistParser` proves the grammar, but an application does
 not begin with a string. It begins with a URI, an unreliable network, HTTP cache
 metadata, a possibly compressed body, and a strict memory budget. `HlsClient`
 turns that entire boundary into one typed operation.
+
+```mermaid
+flowchart LR
+    URI["Playlist URI"] --> HTTP["HTTP request"]
+    HTTP --> Limits["Status, size, gzip, UTF-8 checks"]
+    Limits --> Parse["Parse and validate"]
+    Parse --> Resolve["Resolve every relative URI"]
+    Resolve --> Snapshot["PlaylistSnapshot"]
+    Limits -. typed failure .-> Error["ClientError"]
+    Parse -. typed failure .-> Error
+```
 
 ```scala
 val client = HlsClient.create(
@@ -81,4 +95,3 @@ content policy.
 Create an endpoint that redirects `/master.m3u8` to `/v2/master.m3u8`, whose
 variant is `video.m3u8`. Assert that the resolved URI ends in
 `/v2/video.m3u8`, not `/video.m3u8`.
-

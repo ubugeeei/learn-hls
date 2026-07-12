@@ -2,10 +2,17 @@
 
 An HLS presentation is a graph of resources retrieved over time:
 
-```text
-                    ┌─ video/360p.m3u8 ─ segment0.ts, segment1.ts, ...
-master.m3u8 ────────┼─ video/720p.m3u8 ─ segment0.ts, segment1.ts, ...
-                    └─ audio/en.m3u8   ─ segment0.aac, segment1.aac, ...
+```mermaid
+flowchart LR
+    Master["Multivariant Playlist<br/>master.m3u8"] --> Low["360p Media Playlist"]
+    Master --> High["720p Media Playlist"]
+    Master --> Audio["English audio Media Playlist"]
+    Low --> L0["segment0.ts"]
+    Low --> L1["segment1.ts"]
+    High --> H0["segment0.ts"]
+    High --> H1["segment1.ts"]
+    Audio --> A0["segment0.aac"]
+    Audio --> A1["segment1.aac"]
 ```
 
 The client first chooses a variant from the Multivariant Playlist, then reloads
@@ -31,14 +38,17 @@ a syntactically correct playlist.
 
 Packages are colocated by protocol responsibility:
 
-```text
-hls.model       refined values and immutable protocol data
-hls.parser      text → model, with line-numbered errors
-hls.validation  invariants over a complete model
-hls.render      model → canonical Extended M3U
-hls.builder     safe programmatic authoring
-hls.live        atomic live-window state transitions
-hls.http        reference HTTP delivery
+```mermaid
+flowchart TD
+    Text["Untrusted playlist text"] --> Parser["hls.parser"]
+    Parser --> Model["hls.model"]
+    Builder["hls.builder"] --> Model
+    Model --> Validation["hls.validation"]
+    Validation --> Renderer["hls.render"]
+    Renderer --> Publisher["hls.publish"]
+    Publisher --> Origin["hls.http"]
+    Origin --> Client["hls.client"]
+    Client --> Parser
 ```
 
 Tests are physically colocated with this structure: `PlaylistParserSuite.scala`
