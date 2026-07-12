@@ -125,8 +125,11 @@ The following core Low-Latency HLS features are covered against
 Delivery Directives, parent/Part identity, Delta Update reconstruction, URI
 resolution, canonical rendering, and protocol-minimum validation.
 
-Still not covered from HLS 2: `EXT-X-DEFINE` variable substitution,
-`EXT-X-BITRATE`, newer variant/rendition attributes, content steering,
+Variable substitution with `EXT-X-DEFINE` is covered for `NAME`/`VALUE`,
+`IMPORT`, `QUERYPARAM`, eligible value locations, single-pass replacement,
+source ordering, explicit reload scope, and final redirect URI handling.
+
+Still not covered from HLS 2: `EXT-X-BITRATE`, newer variant/rendition attributes, content steering,
 interstitial asset lists, date-range update semantics, SAMPLE-AES, and newer
 immersive/spatial requirements. They remain separate checklist items rather than
 being hidden inside a broad “HLS 2” claim.

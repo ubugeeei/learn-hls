@@ -95,6 +95,7 @@ as finalized RFC behavior.
 
 - [Low-Latency HLS core](50-hls2/010-low-latency-core.md)
 - [blocking reloads and Playlist Delta Updates](50-hls2/020-delivery-directives-and-deltas.md)
+- [playlist variables without magical global state](50-hls2/030-variable-substitution.md)
 
 See the current [delivery chapter](../docs/06-delivery.md).
 
