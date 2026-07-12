@@ -41,7 +41,7 @@ tests cannot replace inspection of encoded media timestamps and visual quality.
 
 ```bash
 sbt test
-scala-cli test . --server=false
+scala-cli --power test . --server=false
 curl --compressed -i http://localhost:8080/master.m3u8
 curl -H 'Range: bytes=0-1023' -i http://localhost:8080/segment.m4s
 ```

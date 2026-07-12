@@ -13,7 +13,7 @@ described and delivered over HTTP.
 ```bash
 sbt test
 # or
-scala-cli test .
+scala-cli --power test .
 ```
 
 The tutorial starts at [docs/README.md](docs/README.md).
