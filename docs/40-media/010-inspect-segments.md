@@ -32,13 +32,35 @@ flowchart LR
     Segment["Media segment"] --> Styp["optional styp"] --> Moof["moof"] --> Mdat["mdat"]
 ```
 
-`Fmp4Inspector` safely walks top-level boxes, including extended 64-bit sizes,
-and rejects truncated or out-of-bounds declarations. Initialization inspection
-requires `ftyp` and `moov`; media inspection requires `moof` before `mdat`.
+`Fmp4Inspector` safely walks a bounded nested box tree, including extended
+64-bit sizes, and rejects truncated or out-of-bounds declarations.
 
-This is deliberately called structural inspection. RFC 8216 additionally
-requires nested `tfdt` and track-fragment behavior. Codec samples and encryption
-must also be valid. The [coverage matrix](../reference/rfc8216-coverage.md) keeps
+```mermaid
+flowchart TD
+    Init["Initialization section"] --> Ftyp["ftyp: iso6 or CMAF brand"]
+    Init --> Moov["moov"]
+    Moov --> Mvhd["mvhd: duration 0"]
+    Moov --> Trak["one trak per fragment track"]
+    Trak --> Tkhd["tkhd: track_ID, duration 0"]
+    Trak --> Stbl["stbl: sample count 0"]
+    Moov --> Mvex["mvex after last trak"]
+    Fragment["Media fragment"] --> Moof["moof"]
+    Moof --> Traf["traf"]
+    Traf --> Tfhd["tfhd: matching track_ID"]
+    Traf --> Tfdt["tfdt: decode time"]
+    Traf --> Trun["trun: sample run"]
+    Fragment --> Mdat["mdat after moof"]
+```
+
+Initialization inspection requires an `iso6`-compatible or CMAF `ftyp`, a
+`moov`, zero `mvhd`/`tkhd` durations, zero `stsz` sample counts, and `mvex` after
+the final track. Fragment inspection requires every `traf` to contain `tfhd`,
+`tfdt`, and `trun`, rejects absolute base-data offsets, and can compare fragment
+track IDs with the initialization section.
+
+This is deliberately called structural inspection. Sample-entry codecs,
+data-reference tables, every `trun` address, and sample payloads still require
+deeper validation. The [coverage matrix](../reference/rfc8216-coverage.md) keeps
 those missing layers visible.
 
 ## Packed audio and WebVTT
