@@ -40,3 +40,15 @@ This is deliberately called structural inspection. RFC 8216 additionally
 requires nested `tfdt` and track-fragment behavior. Codec samples and encryption
 must also be valid. The [coverage matrix](../reference/rfc8216-coverage.md) keeps
 those missing layers visible.
+
+## Packed audio and WebVTT
+
+Packed AAC, MP3, AC-3, and E-AC-3 segments need an ID3 PRIV frame at the start.
+Its owner is `com.apple.streaming.transportStreamTimestamp`; its eight-byte
+payload carries a 33-bit MPEG timestamp. `PackedAudioInspector` parses ID3v2.3
+and v2.4 frame sizes far enough to extract and validate that HLS timestamp.
+
+`WebVttInspector` validates the `WEBVTT` header, cue timing-line shape, and the
+optional `X-TIMESTAMP-MAP` that relates local cue time to the MPEG timeline.
+Neither inspector decodes media or renders captions: they verify the HLS-specific
+envelope around those payloads.

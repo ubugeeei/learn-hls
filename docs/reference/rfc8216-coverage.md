@@ -93,12 +93,13 @@ not falsely reported as parser validation.
 |---|---|---|---|
 | §3.2 | MPEG-TS | Structural | 188-byte framing, sync byte, PID set, payload continuity counters |
 | §3.3 | fragmented MP4 | Structural | top-level box bounds, extended size, `ftyp`/`moov`, `moof` before `mdat` |
-| §3.4 | packed audio | Not covered | ID3 PRIV timestamp parsing remains missing |
-| §3.5 | WebVTT | Not covered | header, cue validity, and X-TIMESTAMP-MAP remain missing |
+| §3.4 | packed audio | Structural | ID3v2 boundary and Apple transport-stream timestamp PRIV frame |
+| §3.5 | WebVTT | Structural | UTF-8 text shape, WEBVTT header, cue timing, X-TIMESTAMP-MAP |
 
 Nested MPEG-TS PAT/PMT/PES parsing, PCR/PTS validation, nested MP4 `tfdt` and
-track-fragment rules, codec sample validation, and decryption remain missing.
-The inspectors therefore say **structurally acceptable**, never “playable.”
+track-fragment rules, packed-audio codec frames, the complete WebVTT rendering
+model, codec sample validation, and decryption remain missing. The inspectors
+therefore say **structurally acceptable**, never “playable.”
 
 ## Server and publication
 
@@ -122,4 +123,3 @@ specifications, not the stable RFC 8216 completeness claim.
 
 This matrix is the release gate: a future README must not claim broader support
 unless the corresponding row becomes Covered with source links and tests.
-
