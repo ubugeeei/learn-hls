@@ -1,7 +1,7 @@
 package hls.client
 
 import hls.model.Playlist
-import hls.parser.{ParseError, PlaylistParser}
+import hls.parser.{ParseError, PlaylistParser, VariableContext}
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
@@ -17,7 +17,9 @@ final case class PlaylistSnapshot(
     playlist: Playlist,
     entityTag: Option[String],
     lastModified: Option[String],
-    fetchedAt: Instant
+    fetchedAt: Instant,
+    definedVariables: Map[String, String] = Map.empty,
+    importedVariables: Map[String, String] = Map.empty
 )
 
 /** Typed failures produced before a playlist can become a snapshot. */
@@ -55,9 +57,13 @@ final class HlsClient private (
    *   a fully validated snapshot or a typed failure; network and parsing failures are never thrown
    *   by this method
    */
-  def load(uri: URI): Either[ClientError, PlaylistSnapshot] = request(uri, None).flatMap:
+  def load(
+      uri: URI,
+      importedVariables: Map[String, String] = Map.empty
+  ): Either[ClientError, PlaylistSnapshot] = request(uri, None).flatMap:
     case Response.NotModified => Left(ClientError.UnexpectedStatus(uri, 304))
-    case Response.Content(effectiveUri, headers, bytes) => decode(uri, effectiveUri, headers, bytes)
+    case Response.Content(effectiveUri, headers, bytes) =>
+      decode(uri, effectiveUri, headers, bytes, importedVariables)
 
   /**
    * Revalidates a previous snapshot using `ETag` or `Last-Modified`.
@@ -69,7 +75,13 @@ final class HlsClient private (
     request(previous.effectiveUri, Some(previous)).flatMap:
       case Response.NotModified => Right(ReloadResult.NotModified(previous))
       case Response.Content(effectiveUri, headers, bytes) =>
-        decode(previous.requestedUri, effectiveUri, headers, bytes).map(ReloadResult.Modified(_))
+        decode(
+          previous.requestedUri,
+          effectiveUri,
+          headers,
+          bytes,
+          previous.importedVariables
+        ).map(ReloadResult.Modified(_))
 
   private enum Response:
     case NotModified
@@ -106,7 +118,8 @@ final class HlsClient private (
       requested: URI,
       effective: URI,
       headers: java.net.http.HttpHeaders,
-      body: Array[Byte]
+      body: Array[Byte],
+      importedVariables: Map[String, String]
   ): Either[ClientError, PlaylistSnapshot] =
     for
       decompressed <- contentEncoding(headers) match
@@ -119,14 +132,22 @@ final class HlsClient private (
         ClientError.BodyTooLarge(effective, maximumBytes)
       )
       text   <- utf8(decompressed).toRight(ClientError.InvalidUtf8(effective))
-      parsed <- PlaylistParser.parse(text).left.map(ClientError.InvalidPlaylist(effective, _))
+      parsed <- PlaylistParser
+        .parseWithVariables(
+          text,
+          VariableContext(playlistUri = Some(effective), imported = importedVariables)
+        )
+        .left
+        .map(ClientError.InvalidPlaylist(effective, _))
     yield PlaylistSnapshot(
       requested,
       effective,
-      PlaylistResolver.resolve(parsed, effective),
+      PlaylistResolver.resolve(parsed.playlist, effective),
       firstHeader(headers, "ETag"),
       firstHeader(headers, "Last-Modified"),
-      clock()
+      clock(),
+      parsed.definedVariables,
+      importedVariables
     )
 
   private def contentEncoding(headers: java.net.http.HttpHeaders): Option[String] =

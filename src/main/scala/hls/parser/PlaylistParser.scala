@@ -13,27 +13,45 @@ import scala.util.Try
  * produce a [[ParseError]].
  */
 object PlaylistParser:
+  /** A parsed playlist plus variables that it can explicitly export to child Media Playlists. */
+  final case class Result(playlist: Playlist, definedVariables: Map[String, String])
+
   /**
    * Parses, refines, and semantically validates one complete playlist.
    *
    * The method is pure and performs no URI resolution or network access. Unknown extension tags are
    * ignored; malformed implemented tags fail with a one-based source line.
    */
-  def parse(source: String): Either[ParseError, Playlist] =
+  def parse(
+      source: String,
+      context: VariableContext = VariableContext()
+  ): Either[ParseError, Playlist] = parseWithVariables(source, context).map(_.playlist)
+
+  /** Parses a playlist while retaining its non-persistent variable environment for `IMPORT`. */
+  def parseWithVariables(
+      source: String,
+      context: VariableContext = VariableContext()
+  ): Either[ParseError, Result] =
     val normalized = source.stripPrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
-    val lines      = normalized.split("\n", -1).toVector
-    lines.indexWhere(_.nonEmpty) match
-      case -1                                 => Left(ParseError(1, "empty playlist"))
-      case first if lines(first) != "#EXTM3U" =>
-        Left(ParseError(first + 1, "playlist must start with #EXTM3U"))
-      case _
-          if lines.exists(_.startsWith("#EXT-X-STREAM-INF:")) || lines.exists(
-            _.startsWith("#EXT-X-MEDIA:")
-          ) || lines.exists(_.startsWith("#EXT-X-I-FRAME-STREAM-INF:")) || lines.exists(
-            _.startsWith("#EXT-X-SESSION-")
-          ) =>
-        MultivariantPlaylistParser.parse(lines)
-      case _ => parseMedia(lines)
+    val rawLines   = normalized.split("\n", -1).toVector
+    VariableSubstitution
+      .expand(rawLines, context)
+      .flatMap: expansion =>
+        val lines = expansion.lines
+        lines.indexWhere(_.nonEmpty) match
+          case -1                                 => Left(ParseError(1, "empty playlist"))
+          case first if lines(first) != "#EXTM3U" =>
+            Left(ParseError(first + 1, "playlist must start with #EXTM3U"))
+          case _
+              if lines.exists(_.startsWith("#EXT-X-STREAM-INF:")) || lines.exists(
+                _.startsWith("#EXT-X-MEDIA:")
+              ) || lines.exists(_.startsWith("#EXT-X-I-FRAME-STREAM-INF:")) || lines.exists(
+                _.startsWith("#EXT-X-SESSION-")
+              ) =>
+            if expansion.importedNames.nonEmpty then
+              Left(ParseError(0, "EXT-X-DEFINE IMPORT is forbidden in Multivariant Playlists"))
+            else MultivariantPlaylistParser.parse(lines).map(Result(_, expansion.definedVariables))
+          case _ => parseMedia(lines).map(Result(_, expansion.definedVariables))
 
   private final case class Pending(
       duration: Option[(Duration, Option[String])] = None,
