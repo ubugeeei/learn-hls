@@ -66,6 +66,12 @@ far larger domain.
 - TLS, key authorization, URI design, and CDN behavior
 - property tests, fuzzing, Apple validator tools, and failure drills
 
+Practical implementation chapters already available:
+
+- [load a real playlist over HTTP](20-practical/010-http-client.md)
+- [conditional live reloads](20-practical/020-conditional-reloads.md)
+- [cache-aware origin delivery](20-practical/030-cache-aware-origin.md)
+
 See the current [delivery chapter](../docs/06-delivery.md).
 
 ## Checkpoint source
