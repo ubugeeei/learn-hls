@@ -19,7 +19,28 @@ flowchart LR
 
 `MpegTsInspector` checks total alignment, every sync byte, and continuity per
 PID. It recognizes the discontinuity indicator and ignores the null-packet PID.
-It does not yet parse PAT, PMT, PES, PTS, or codec payloads.
+
+`MpegTsProgramInspector` then follows the program tables and the first
+elementary-stream timestamps:
+
+```mermaid
+flowchart LR
+    PAT["PAT on PID 0"] --> PMTPid["Find one PMT PID"]
+    PMTPid --> PMT["PMT"]
+    PMT --> PCR["PCR PID"]
+    PMT --> Video["Video elementary PID"]
+    PMT --> Audio["Audio elementary PID"]
+    Video --> VideoPes["PES start code and first PTS"]
+    Audio --> AudioPes["PES start code and first PTS"]
+```
+
+PSI sections may cross packet boundaries, so the inspector uses the
+payload-unit-start indicator, pointer field, and section length to reassemble
+them. It validates MPEG-2 CRC-32 before trusting PAT or PMT, rejects
+multi-program segments, extracts PCR and elementary PIDs, checks PES start codes
+and PTS marker bits, and reports whether the first two packets are the
+recommended PAT then PMT. PAT/PMT may be absent only when the caller confirms an
+applied `EXT-X-MAP`.
 
 ## Fragmented MP4 boxes
 
@@ -58,7 +79,8 @@ the final track. Fragment inspection requires every `traf` to contain `tfhd`,
 `tfdt`, and `trun`, rejects absolute base-data offsets, and can compare fragment
 track IDs with the initialization section.
 
-This is deliberately called structural inspection. Sample-entry codecs,
+This is deliberately called structural inspection. MPEG-TS codec payloads and
+complete PCR/PTS continuity, MP4 sample-entry codecs,
 data-reference tables, every `trun` address, and sample payloads still require
 deeper validation. The [coverage matrix](../reference/rfc8216-coverage.md) keeps
 those missing layers visible.

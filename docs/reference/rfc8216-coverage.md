@@ -93,13 +93,13 @@ not falsely reported as parser validation.
 
 | RFC section | Format | Status | Checked |
 |---|---|---|---|
-| §3.2 | MPEG-TS | Structural | 188-byte framing, sync byte, PID set, payload continuity counters |
+| §3.2 | MPEG-TS | Structural | 188-byte framing, sync, continuity, PAT/PMT reassembly and CRC, single program, PCR/elementary PIDs, PES start and first PTS, map-aware initialization |
 | §3.3 | fragmented MP4 | Structural | bounded nested boxes, compatible brand, zero init durations/samples, `trak`/`mvex`, `traf`/`tfhd`/`tfdt`/`trun`, track IDs, relative addressing, `moof`/`mdat` |
 | §3.4 | packed audio | Structural | ID3v2 boundary and Apple transport-stream timestamp PRIV frame |
 | §3.5 | WebVTT | Structural | UTF-8 text shape, WEBVTT header, cue timing, X-TIMESTAMP-MAP |
 
-Nested MPEG-TS PAT/PMT/PES parsing, PCR/PTS validation, complete MP4 sample-entry,
-data-reference and sample-address validation, packed-audio codec frames, the
+Complete MPEG-TS PCR/PTS timeline continuity and codec payload validation,
+complete MP4 sample-entry, data-reference and sample-address validation, packed-audio codec frames, the
 complete WebVTT rendering model, codec sample validation, and SAMPLE-AES remain missing. The inspectors
 therefore say **structurally acceptable**, never “playable.”
 
